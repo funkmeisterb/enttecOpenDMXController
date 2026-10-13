@@ -15,7 +15,7 @@ namespace dmxEasyDancing
         public const int DMX_BUFFER_SIZE = 513;
 
         private static byte[] dmxBuffer = new byte[DMX_BUFFER_SIZE];
-        private static IntPtr handle = IntPtr.Zero;
+        private static IntPtr ftHandle = IntPtr.Zero;
         private static bool dmxThreadRunning = false;
         private static Thread? dmxThread;
 
@@ -28,6 +28,89 @@ namespace dmxEasyDancing
         /// Custom logger action. Defaults to Console.WriteLine.
         /// </summary>
         public static Action<string> Logger { get; set; } = Console.WriteLine;
+
+        #region FTDI D2XX Driver Imports
+        public enum FT_STATUS : uint
+        {
+            FT_OK = 0,
+            FT_INVALID_HANDLE,
+            FT_DEVICE_NOT_FOUND,
+            FT_DEVICE_NOT_OPENED,
+            FT_IO_ERROR,
+            FT_INSUFFICIENT_RESOURCES,
+            FT_INVALID_PARAMETER,
+            FT_INVALID_BAUD_RATE,
+            FT_DEVICE_NOT_OPENED_FOR_ERASE,
+            FT_DEVICE_NOT_OPENED_FOR_WRITE,
+            FT_FAILED_TO_WRITE_DEVICE,
+            FT_EEPROM_READ_FAILED,
+            FT_EEPROM_WRITE_FAILED,
+            FT_EEPROM_ERASE_FAILED,
+            FT_EEPROM_NOT_PRESENT,
+            FT_EEPROM_NOT_PROGRAMMED,
+            FT_INVALID_ARGS,
+            FT_NOT_SUPPORTED,
+            FT_OTHER_ERROR,
+            FT_DEVICE_LIST_NOT_READY
+        }
+
+        public const byte BITS_8 = 8;
+        public const byte STOP_BITS_2 = 2;
+        public const byte PARITY_NONE = 0;
+        public const ushort FLOW_NONE = 0;
+        public const byte PURGE_RX = 1;
+        public const byte PURGE_TX = 2;
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_CreateDeviceInfoList(ref uint numDevs);
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_GetDeviceInfoDetail(
+            uint index,
+            ref uint flags,
+            ref uint type,
+            ref uint id,
+            ref uint locId,
+            byte[] serialNumber,
+            byte[] description,
+            ref IntPtr handle);
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_Open(uint deviceNumber, ref IntPtr handle);
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_OpenEx(string pvArg1, uint dwFlags, ref IntPtr handle);
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_Close(IntPtr handle);
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_ResetDevice(IntPtr handle);
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_SetDivisor(IntPtr handle, char usDivisor);
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_SetDataCharacteristics(IntPtr handle, byte uWordLength, byte uStopBits, byte uParity);
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_SetFlowControl(IntPtr handle, char usFlowControl, byte uXon, byte uXoff);
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_ClrRts(IntPtr handle);
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_Purge(IntPtr handle, uint dwMask);
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_SetBreakOn(IntPtr handle);
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_SetBreakOff(IntPtr handle);
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_Write(IntPtr handle, IntPtr lpBuffer, uint dwBytesToWrite, ref uint lpdwBytesWritten);
+        #endregion
 
         private static void Log(string message)
         {
@@ -79,200 +162,89 @@ namespace dmxEasyDancing
             return devices;
         }
 
-        #region Unmanaged Dll Imports
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern IntPtr CreateFile(
-            string lpFileName,
-            uint dwDesiredAccess,
-            uint dwShareMode,
-            IntPtr lpSecurityAttributes,
-            uint dwCreationDisposition,
-            uint dwFlagsAndAttributes,
-            IntPtr hTemplateFile);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool CloseHandle(IntPtr hObject);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool GetCommState(IntPtr hFile, ref DCB lpDCB);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool SetCommState(IntPtr hFile, ref DCB lpDCB);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool EscapeCommFunction(IntPtr hFile, uint dwFunc);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool WriteFile(
-            IntPtr hFile,
-            byte[] lpBuffer,
-            uint nNumberOfBytesToWrite,
-            out uint lpNumberOfBytesWritten,
-            IntPtr lpOverlapped);
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct DCB
+        private static void EnumerateD2xxDevices()
         {
-            public uint DCBlength;
-            public uint BaudRate;
-            public uint fBinary;
-            public uint fParity;
-            public uint fOutxCtsFlow;
-            public uint fOutxDsrFlow;
-            public uint fDtrControl;
-            public uint fDsrSensitivity;
-            public uint fTXContinueOnXoff;
-            public uint fOutX;
-            public uint fInX;
-            public uint fErrorChar;
-            public uint fNull;
-            public uint fRtsControl;
-            public uint fAbortOnError;
-            public uint fDummy2;
-            public ushort wReserved;
-            public ushort XonLim;
-            public ushort XoffLim;
-            public byte ByteSize;
-            public byte Parity;
-            public byte StopBits;
-            public char XonChar;
-            public char XoffChar;
-            public char ErrorChar;
-            public char EofChar;
-            public char EvtChar;
-            public ushort wReserved1;
-        }
-        #endregion
-
-        private static List<string> BuildCandidatePaths(List<DeviceInfo> devices)
-        {
-            var candidatePaths = new List<string>();
-
-            // 1. Look for FTDI bus devices and extracted COM ports
-            foreach (var d in devices)
+            try
             {
-                // If it's an FTDIBUS device, try direct bus path \\.\<DeviceID>
-                if (d.DeviceID.StartsWith(@"FTDIBUS\", StringComparison.OrdinalIgnoreCase))
+                uint numDevs = 0;
+                FT_STATUS status = FT_CreateDeviceInfoList(ref numDevs);
+                Log($"FTDI D2XX Driver reports {numDevs} connected device(s) (Status: {status}):");
+                for (uint i = 0; i < numDevs; i++)
                 {
-                    string ftdiBusPath = @"\\.\" + d.DeviceID;
-                    if (!candidatePaths.Contains(ftdiBusPath))
-                    {
-                        candidatePaths.Add(ftdiBusPath);
-                    }
-                }
-
-                // Check for COM port in Name/Caption (e.g., "USB Serial Port (COM3)")
-                var comMatch = Regex.Match(d.Name, @"\((COM\d+)\)", RegexOptions.IgnoreCase);
-                if (comMatch.Success)
-                {
-                    string comPath = @"\\.\" + comMatch.Groups[1].Value.ToUpperInvariant();
-                    if (!candidatePaths.Contains(comPath))
-                    {
-                        candidatePaths.Add(comPath);
-                    }
+                    uint flags = 0, type = 0, id = 0, locId = 0;
+                    byte[] serial = new byte[16];
+                    byte[] desc = new byte[64];
+                    IntPtr dummyHandle = IntPtr.Zero;
+                    FT_STATUS detailStatus = FT_GetDeviceInfoDetail(i, ref flags, ref type, ref id, ref locId, serial, desc, ref dummyHandle);
+                    string sn = System.Text.Encoding.ASCII.GetString(serial).TrimEnd('\0');
+                    string description = System.Text.Encoding.ASCII.GetString(desc).TrimEnd('\0');
+                    Log($"  D2XX Device [{i}]: Serial='{sn}', Desc='{description}', ID=0x{id:X}, Status={detailStatus}");
                 }
             }
-
-            // 2. Known legacy and generic fallbacks
-            string legacyOpenDmx = @"\\.\ENTTEC OPEN DMX USB";
-            string legacySpecific = @"\\.\FTDIBUS\VID_0403+PID_6001+A50285BI\0000";
-            if (!candidatePaths.Contains(legacyOpenDmx)) candidatePaths.Add(legacyOpenDmx);
-            if (!candidatePaths.Contains(legacySpecific)) candidatePaths.Add(legacySpecific);
-
-            return candidatePaths;
+            catch (Exception ex)
+            {
+                Log($"Error enumerating D2XX devices: {ex.Message}");
+            }
         }
 
         public static bool Start()
         {
             Log("==================================================");
-            Log("Starting EnttecOpenDmx initialization...");
-            Log("Enumerating connected USB and FTDI/Serial devices via WMI...");
+            Log("Starting EnttecOpenDmx initialization using native FTDI D2XX driver...");
 
+            // 1. Log WMI USB Devices
             var devices = ListUsbDevices();
-            if (devices.Count == 0)
+            Log($"Found {devices.Count} USB/Serial device(s) in Windows PnP:");
+            foreach (var d in devices)
             {
-                Log("No matching USB or serial devices detected via WMI.");
-            }
-            else
-            {
-                Log($"Found {devices.Count} relevant device(s):");
-                for (int i = 0; i < devices.Count; i++)
-                {
-                    var d = devices[i];
-                    Log($"  [{i + 1}] Name: \"{d.Name}\" | Status: {d.Status}");
-                    Log($"      DeviceID: {d.DeviceID}");
-                }
+                Log($"  [PnP] Name: \"{d.Name}\" | ID: {d.DeviceID}");
             }
 
-            var candidatePaths = BuildCandidatePaths(devices);
-            Log("Attempting connection across candidate paths in order:");
-            foreach (var path in candidatePaths)
-            {
-                Log($"  -> Trying path: {path}");
-                handle = CreateFile(
-                    path,
-                    0x40000000, // GENERIC_WRITE
-                    0,          // No sharing
-                    IntPtr.Zero,
-                    3,          // OPEN_EXISTING
-                    0,
-                    IntPtr.Zero);
+            // 2. Log FTDI D2XX Devices
+            EnumerateD2xxDevices();
 
-                if (handle != new IntPtr(-1) && handle != IntPtr.Zero)
-                {
-                    Log($"Successfully opened device handle: 0x{handle.ToInt64():X} via \"{path}\"");
-                    break;
-                }
-                else
-                {
-                    int lastError = Marshal.GetLastWin32Error();
-                    string errorMsg = new Win32Exception(lastError).Message;
-                    Log($"     Failed to open \"{path}\". Win32 Error {lastError}: {errorMsg}");
-                }
+            // 3. Open FTDI Device
+            Log("Attempting to open FTDI device via D2XX FT_Open(0)...");
+            FT_STATUS status = FT_Open(0, ref ftHandle);
+            if (status != FT_STATUS.FT_OK || ftHandle == IntPtr.Zero)
+            {
+                Log($"FT_Open(0) failed with status: {status}. Trying FT_OpenEx by description...");
+                status = FT_OpenEx("USB Serial Converter", 2 /* OPEN_BY_DESCRIPTION */, ref ftHandle);
             }
 
-            if (handle == new IntPtr(-1) || handle == IntPtr.Zero)
+            if (status != FT_STATUS.FT_OK || ftHandle == IntPtr.Zero)
             {
-                Log("Failed to open any valid device handle. Start() aborted.");
+                Log($"Failed to open FTDI D2XX device. Final status: {status}");
                 Log("==================================================");
                 return false;
             }
 
-            // Configure DCB (Comm State)
-            Log("Querying current comm state (GetCommState)...");
-            DCB dcb = new DCB();
-            if (!GetCommState(handle, ref dcb))
-            {
-                int lastError = Marshal.GetLastWin32Error();
-                string errorMsg = new Win32Exception(lastError).Message;
-                Log($"GetCommState failed. Win32 Error {lastError}: {errorMsg}");
-                CloseHandle(handle);
-                handle = IntPtr.Zero;
-                return false;
-            }
+            Log($"Successfully opened FTDI D2XX device! Handle: 0x{ftHandle.ToInt64():X}");
 
-            Log($"Current DCB: BaudRate={dcb.BaudRate}, ByteSize={dcb.ByteSize}, Parity={dcb.Parity}, StopBits={dcb.StopBits}");
+            // 4. Initialise OpenDMX FTDI chip configuration
+            Log("Configuring FTDI chip for DMX512 (250,000 baud, 8N2, no flow control)...");
+            status = FT_ResetDevice(ftHandle);
+            Log($"  FT_ResetDevice: {status}");
 
-            dcb.BaudRate = 250000;
-            dcb.ByteSize = 8;
-            dcb.Parity = 0;   // NOPARITY
-            dcb.StopBits = 2; // TWOSTOPBITS
+            // Baud rate 250,000: FTDI divisor is 12 (3,000,000 / 250,000 = 12)
+            status = FT_SetDivisor(ftHandle, (char)12);
+            Log($"  FT_SetDivisor(12) [250 kBaud]: {status}");
 
-            Log("Applying DMX comm state settings (BaudRate=250000, 8 Data Bits, 2 Stop Bits, No Parity)...");
-            if (!SetCommState(handle, ref dcb))
-            {
-                int lastError = Marshal.GetLastWin32Error();
-                string errorMsg = new Win32Exception(lastError).Message;
-                Log($"SetCommState failed. Win32 Error {lastError}: {errorMsg}");
-                CloseHandle(handle);
-                handle = IntPtr.Zero;
-                return false;
-            }
+            status = FT_SetDataCharacteristics(ftHandle, BITS_8, STOP_BITS_2, PARITY_NONE);
+            Log($"  FT_SetDataCharacteristics(8, Stop2, ParityNone): {status}");
 
-            Log("DCB configuration successful.");
+            status = FT_SetFlowControl(ftHandle, (char)FLOW_NONE, 0, 0);
+            Log($"  FT_SetFlowControl(FLOW_NONE): {status}");
 
-            // Start DMX transmission thread
-            Log("Starting background DMX output thread...");
+            status = FT_ClrRts(ftHandle);
+            Log($"  FT_ClrRts: {status}");
+
+            status = FT_Purge(ftHandle, PURGE_TX);
+            status = FT_Purge(ftHandle, PURGE_RX);
+            Log("  FT_Purge(TX/RX) complete.");
+
+            // 5. Start continuous DMX transmission thread
+            Log("Starting continuous DMX output thread...");
             dmxThread = new Thread(DmxThread)
             {
                 IsBackground = true,
@@ -296,11 +268,12 @@ namespace dmxEasyDancing
                 dmxThread.Join();
                 Log("DMX thread joined.");
             }
-            if (handle != IntPtr.Zero && handle != new IntPtr(-1))
+
+            if (ftHandle != IntPtr.Zero)
             {
-                CloseHandle(handle);
-                handle = IntPtr.Zero;
-                Log("Device handle closed.");
+                FT_Close(ftHandle);
+                ftHandle = IntPtr.Zero;
+                Log("FTDI D2XX device handle closed.");
             }
             Log("EnttecOpenDmx stopped.");
         }
@@ -315,25 +288,32 @@ namespace dmxEasyDancing
 
         private static void DmxThread()
         {
-            while (dmxThreadRunning)
+            IntPtr unmanagedBuffer = Marshal.AllocHGlobal(DMX_BUFFER_SIZE);
+            try
             {
-                WriteDmx();
-                Thread.Sleep(25); // ~40Hz refresh rate
+                while (dmxThreadRunning)
+                {
+                    if (ftHandle != IntPtr.Zero)
+                    {
+                        // 1. Send DMX Break & MAB
+                        FT_SetBreakOn(ftHandle);
+                        FT_SetBreakOff(ftHandle);
+
+                        // 2. Start Code = 0
+                        dmxBuffer[0] = 0;
+
+                        // 3. Write DMX Packet
+                        Marshal.Copy(dmxBuffer, 0, unmanagedBuffer, DMX_BUFFER_SIZE);
+                        uint bytesWritten = 0;
+                        FT_Write(ftHandle, unmanagedBuffer, (uint)DMX_BUFFER_SIZE, ref bytesWritten);
+                    }
+                    Thread.Sleep(25); // ~40Hz refresh rate
+                }
             }
-        }
-
-        private static void WriteDmx()
-        {
-            if (handle == IntPtr.Zero || handle == new IntPtr(-1)) return;
-
-            // Break
-            EscapeCommFunction(handle, 5); // SETBREAK
-            Thread.Sleep(1);
-            EscapeCommFunction(handle, 6); // CLRBREAK
-
-            // Data
-            dmxBuffer[0] = 0; // DMX Start Code
-            WriteFile(handle, dmxBuffer, DMX_BUFFER_SIZE, out _, IntPtr.Zero);
+            finally
+            {
+                Marshal.FreeHGlobal(unmanagedBuffer);
+            }
         }
     }
 }
