@@ -24,9 +24,11 @@ This application connects directly to the FTDI device using native FTDI drivers,
   - Full support for 5-channel fixtures (`Gain / Dimmer`, `Red`, `Green`, `Blue`, `White`).
   - Interactive HTML color picker (RGB) with synchronized individual sliders for Red, Green, Blue, White, and Master Gain.
   - Quick-preset buttons (Red, Green, Blue, White, Amber) and one-touch Blackout.
-- **On-Demand Auto Test Pattern**:
+- **On-Demand Auto Test Pattern & Random Lightning Effect**:
   - Safe launch: defaults all channels to `0` on startup (no unexpected flashing).
-  - Interactive toggle button in the web UI to cycle an automated RGBW test pattern, pausing automatically when manual adjustments are made.
+  - **RGBW Auto Pattern**: Interactive toggle in the web UI to cycle through Red, Green, Blue, and White.
+  - **Random Lightning / Flicker Effect**: Interactive toggle simulating dynamic random lightning bursts and flicker, playing with stochastic Gain (brightness) and White levels, interspersed with micro-dips and random rest delays.
+  - Smart state handling: automatically disengages active effects when manual color or slider adjustments are made.
 
 ---
 

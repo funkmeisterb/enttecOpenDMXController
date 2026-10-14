@@ -18,6 +18,10 @@ namespace dmxEasyDancing
 
         private static CancellationTokenSource? _patternCts;
         private static readonly object _patternLock = new();
+
+        private static CancellationTokenSource? _randomEffectCts;
+        private static readonly object _randomEffectLock = new();
+
         private static WebServer? _webServer;
 
         static void Main(string[] args)
@@ -38,6 +42,7 @@ namespace dmxEasyDancing
                 port,
                 onColorChanged: OnColorChanged,
                 onPatternToggle: OnPatternToggle,
+                onRandomEffectToggle: OnRandomEffectToggle,
                 getState: () => _state);
 
             _webServer.Start();
@@ -55,6 +60,7 @@ namespace dmxEasyDancing
                 e.Cancel = true;
                 Console.WriteLine("\nShutting down Enttec OpenDMX & Web server...");
                 StopPattern();
+                StopRandomEffect();
                 _webServer.Stop();
                 // Turn lights off
                 SetPixelColor(pixelIndex: 0, gain: 0, r: 0, g: 0, b: 0, w: 0);
@@ -68,11 +74,14 @@ namespace dmxEasyDancing
 
         private static void OnColorChanged(byte gain, byte r, byte g, byte b, byte w)
         {
-            // If manual color changed, disable active test pattern
+            // If manual color changed, disable active effects/patterns
             if (_state.PatternRunning)
             {
                 StopPattern();
-                _state.PatternRunning = false;
+            }
+            if (_state.RandomEffectRunning)
+            {
+                StopRandomEffect();
             }
 
             _state.Gain = gain;
@@ -88,6 +97,10 @@ namespace dmxEasyDancing
         {
             if (enabled)
             {
+                if (_state.RandomEffectRunning)
+                {
+                    StopRandomEffect();
+                }
                 StartPattern();
             }
             else
@@ -95,6 +108,104 @@ namespace dmxEasyDancing
                 StopPattern();
                 // Restore manual state color
                 SetPixelColor(0, _state.Gain, _state.R, _state.G, _state.B, _state.W);
+            }
+        }
+
+        private static void OnRandomEffectToggle(bool enabled)
+        {
+            if (enabled)
+            {
+                if (_state.PatternRunning)
+                {
+                    StopPattern();
+                }
+                StartRandomEffect();
+            }
+            else
+            {
+                StopRandomEffect();
+                // Restore manual state color
+                SetPixelColor(0, _state.Gain, _state.R, _state.G, _state.B, _state.W);
+            }
+        }
+
+        private static void StartRandomEffect()
+        {
+            lock (_randomEffectLock)
+            {
+                if (_state.RandomEffectRunning) return;
+                _state.RandomEffectRunning = true;
+                _randomEffectCts = new CancellationTokenSource();
+                var token = _randomEffectCts.Token;
+
+                Task.Run(async () =>
+                {
+                    var rand = Random.Shared;
+
+                    while (!token.IsCancellationRequested)
+                    {
+                        // 3 modes: Strobe burst (45%), Random surge/flicker (35%), or Brief blackout dip (20%)
+                        int mode = rand.Next(0, 100);
+
+                        if (mode < 45)
+                        {
+                            // Rapid lightning / strobe burst: 2 to 6 micro-flashes
+                            int flashes = rand.Next(2, 7);
+                            for (int i = 0; i < flashes && !token.IsCancellationRequested; i++)
+                            {
+                                byte flashGain = (byte)rand.Next(180, 256);
+                                byte flashWhite = (byte)rand.Next(160, 256);
+                                SetPixelColor(0, flashGain, _state.R, _state.G, _state.B, flashWhite);
+                                await Task.Delay(rand.Next(20, 55), token);
+
+                                // Micro dip between flashes
+                                SetPixelColor(0, 0, _state.R, _state.G, _state.B, 0);
+                                await Task.Delay(rand.Next(15, 45), token);
+                            }
+                        }
+                        else if (mode < 80)
+                        {
+                            // Random flicker / pulse across Gain and White
+                            int steps = rand.Next(3, 7);
+                            for (int s = 0; s < steps && !token.IsCancellationRequested; s++)
+                            {
+                                byte surgeGain = (byte)rand.Next(60, 256);
+                                byte surgeWhite = (byte)rand.Next(30, 256);
+                                SetPixelColor(0, surgeGain, _state.R, _state.G, _state.B, surgeWhite);
+                                await Task.Delay(rand.Next(40, 110), token);
+                            }
+                        }
+                        else
+                        {
+                            // Brief dip / blackout pause
+                            SetPixelColor(0, 0, _state.R, _state.G, _state.B, 0);
+                            await Task.Delay(rand.Next(50, 180), token);
+                        }
+
+                        // Randomized delay between bursts
+                        int restDelay = rand.Next(80, 750);
+                        try
+                        {
+                            await Task.Delay(restDelay, token);
+                        }
+                        catch (TaskCanceledException)
+                        {
+                            break;
+                        }
+                    }
+                }, token);
+            }
+        }
+
+        private static void StopRandomEffect()
+        {
+            lock (_randomEffectLock)
+            {
+                if (!_state.RandomEffectRunning) return;
+                _state.RandomEffectRunning = false;
+                _randomEffectCts?.Cancel();
+                _randomEffectCts?.Dispose();
+                _randomEffectCts = null;
             }
         }
 

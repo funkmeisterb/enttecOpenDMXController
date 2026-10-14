@@ -165,14 +165,24 @@
     </header>
 
     <div class="card">
-      <div class="card-title">Auto Test Pattern</div>
-      <div class="switch-wrap">
+      <div class="card-title">Auto Effects</div>
+      <div class="switch-wrap" style="padding-bottom:12px; border-bottom:1px solid var(--border);">
         <div>
           <div style="font-weight:600; font-size:0.95rem;">Run RGBW Pattern</div>
           <div style="font-size:0.8rem; color:var(--muted);">Cycles R, G, B, W at full gain</div>
         </div>
         <label class="switch">
           <input type="checkbox" id="patternToggle">
+          <span class="slider-toggle"></span>
+        </label>
+      </div>
+      <div class="switch-wrap">
+        <div>
+          <div style="font-weight:600; font-size:0.95rem;">Random Lightning / Flicker</div>
+          <div style="font-size:0.8rem; color:var(--muted);">Random bursts playing with Gain and White</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="randomEffectToggle">
           <span class="slider-toggle"></span>
         </label>
       </div>
@@ -232,6 +242,7 @@
     let ws;
     const statusEl = document.getElementById('status');
     const patternToggle = document.getElementById('patternToggle');
+    const randomEffectToggle = document.getElementById('randomEffectToggle');
     const gain = document.getElementById('gain');
     const r = document.getElementById('r');
     const g = document.getElementById('g');
@@ -261,6 +272,7 @@
           const msg = JSON.parse(e.data);
           if (msg.type === 'state') {
             patternToggle.checked = msg.pattern;
+            randomEffectToggle.checked = !!msg.randomEffect;
             gain.value = msg.gain;
             r.value = msg.r;
             g.value = msg.g;
@@ -290,6 +302,15 @@
         ws.send(JSON.stringify({
           type: 'pattern',
           enabled: patternToggle.checked
+        }));
+      }
+    });
+
+    randomEffectToggle.addEventListener('change', () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'randomEffect',
+          enabled: randomEffectToggle.checked
         }));
       }
     });

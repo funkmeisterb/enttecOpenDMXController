@@ -18,6 +18,7 @@ namespace dmxEasyDancing
         private readonly CancellationTokenSource _cts = new();
         private readonly Action<byte, byte, byte, byte, byte> _onColorChanged;
         private readonly Action<bool> _onPatternToggle;
+        private readonly Action<bool> _onRandomEffectToggle;
         private readonly Func<AppState> _getState;
         private readonly int _port;
         private readonly byte[] _htmlBytes;
@@ -30,17 +31,20 @@ namespace dmxEasyDancing
             public byte B { get; set; } = 0;
             public byte W { get; set; } = 0;
             public bool PatternRunning { get; set; } = false;
+            public bool RandomEffectRunning { get; set; } = false;
         }
 
         public WebServer(
             int port,
             Action<byte, byte, byte, byte, byte> onColorChanged,
             Action<bool> onPatternToggle,
+            Action<bool> onRandomEffectToggle,
             Func<AppState> getState)
         {
             _port = port;
             _onColorChanged = onColorChanged;
             _onPatternToggle = onPatternToggle;
+            _onRandomEffectToggle = onRandomEffectToggle;
             _getState = getState;
             _htmlBytes = LoadHtmlBytes();
         }
@@ -202,6 +206,12 @@ namespace dmxEasyDancing
                     _onPatternToggle(enabled);
                     BroadcastState(_getState());
                 }
+                else if (type == "randomEffect")
+                {
+                    bool enabled = root.GetProperty("enabled").GetBoolean();
+                    _onRandomEffectToggle(enabled);
+                    BroadcastState(_getState());
+                }
             }
             catch (Exception ex)
             {
@@ -232,7 +242,8 @@ namespace dmxEasyDancing
                     g = state.G,
                     b = state.B,
                     w = state.W,
-                    pattern = state.PatternRunning
+                    pattern = state.PatternRunning,
+                    randomEffect = state.RandomEffectRunning
                 };
                 string json = JsonSerializer.Serialize(payload);
                 byte[] bytes = Encoding.UTF8.GetBytes(json);
