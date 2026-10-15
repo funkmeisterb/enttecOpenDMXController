@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enttec OpenDMX Controller</title>
+  <style>
+    :root {
+      --bg: #12141a;
+      --card: #1b1e27;
+      --border: #292d3b;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #3b82f6;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+    .container {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    h1 { font-size: 1.25rem; font-weight: 600; }
+    .status-badge {
+      font-size: 0.75rem;
+      padding: 4px 8px;
+      border-radius: 9999px;
+      background: #ef4444;
+      color: white;
+      font-weight: 500;
+    }
+    .status-badge.connected { background: #10b981; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .card-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .preview-box {
+      height: 60px;
+      border-radius: 8px;
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    label { font-size: 0.9rem; font-weight: 500; min-width: 65px; }
+    .slider-val {
+      font-size: 0.85rem;
+      font-family: monospace;
+      color: var(--muted);
+      min-width: 32px;
+      text-align: right;
+    }
+    input[type=range] { flex: 1; accent-color: var(--accent); cursor: pointer; }
+    .color-picker-wrap { display: flex; align-items: center; gap: 16px; }
+    input[type=color] {
+      border: 2px solid var(--border);
+      width: 52px;
+      height: 52px;
+      border-radius: 10px;
+      background: transparent;
+      cursor: pointer;
+    }
+    .presets {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+    .btn-preset {
+      height: 38px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: white;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    }
+    .btn-blackout {
+      background: #27272a;
+      border: 1px solid #3f3f46;
+      color: #f43f5e;
+      font-weight: 600;
+      border-radius: 8px;
+      padding: 10px;
+      cursor: pointer;
+    }
+    .switch-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 48px;
+      height: 26px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider-toggle {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #334155;
+      transition: .3s;
+      border-radius: 34px;
+    }
+    .slider-toggle:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .slider-toggle { background-color: var(--accent); }
+    input:checked + .slider-toggle:before { transform: translateX(22px); }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <h1>Enttec OpenDMX</h1>
+      <span id="status" class="status-badge">Disconnected</span>
+    </header>
+
+    <div class="card">
+      <div class="card-title">Auto Effects</div>
+      <div class="switch-wrap" style="padding-bottom:12px; border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-weight:600; font-size:0.95rem;">Run RGBW Pattern</div>
+          <div style="font-size:0.8rem; color:var(--muted);">Cycles R, G, B, W at full gain</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="patternToggle">
+          <span class="slider-toggle"></span>
+        </label>
+      </div>
+      <div class="switch-wrap">
+        <div>
+          <div style="font-weight:600; font-size:0.95rem;">Random Lightning / Flicker</div>
+          <div style="font-size:0.8rem; color:var(--muted);">Random bursts playing with Gain and White</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="randomEffectToggle">
+          <span class="slider-toggle"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="card" id="controlsCard">
+      <div class="card-title">Gain + RGBW Control</div>
+      <div id="preview" class="preview-box">DMX Preview</div>
+
+      <div class="row">
+        <label>Gain</label>
+        <input type="range" id="gain" min="0" max="255" value="255">
+        <span id="gainVal" class="slider-val">255</span>
+      </div>
+
+      <div class="color-picker-wrap">
+        <input type="color" id="colorPicker" value="#ff0000">
+        <div style="flex:1; display:flex; flex-direction:column; gap:4px;">
+          <div style="font-size:0.85rem; font-weight:600;">Color Picker (RGB)</div>
+          <div id="hexLabel" style="font-size:0.8rem; color:var(--muted); font-family:monospace;">#FF0000</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <label style="color:#f87171;">Red</label>
+        <input type="range" id="r" min="0" max="255" value="255">
+        <span id="rVal" class="slider-val">255</span>
+      </div>
+      <div class="row">
+        <label style="color:#4ade80;">Green</label>
+        <input type="range" id="g" min="0" max="255" value="0">
+        <span id="gVal" class="slider-val">0</span>
+      </div>
+      <div class="row">
+        <label style="color:#60a5fa;">Blue</label>
+        <input type="range" id="b" min="0" max="255" value="0">
+        <span id="bVal" class="slider-val">0</span>
+      </div>
+      <div class="row">
+        <label style="color:#f1f5f9;">White</label>
+        <input type="range" id="w" min="0" max="255" value="0">
+        <span id="wVal" class="slider-val">0</span>
+      </div>
+
+      <div class="presets">
+        <button class="btn-preset" style="background:#dc2626;" onclick="setPreset(255,0,0,0)">Red</button>
+        <button class="btn-preset" style="background:#16a34a;" onclick="setPreset(0,255,0,0)">Green</button>
+        <button class="btn-preset" style="background:#2563eb;" onclick="setPreset(0,0,255,0)">Blue</button>
+        <button class="btn-preset" style="background:#e2e8f0; color:#18181b;" onclick="setPreset(0,0,0,255)">White</button>
+        <button class="btn-preset" style="background:#f59e0b;" onclick="setPreset(255,160,0,0)">Amber</button>
+      </div>
+
+      <button class="btn-blackout" onclick="blackout()">Blackout (All 0)</button>
+    </div>
+  </div>
+  <script>
+    let ws;
+    const statusEl = document.getElementById('status');
+    const patternToggle = document.getElementById('patternToggle');
+    const randomEffectToggle = document.getElementById('randomEffectToggle');
+    const gain = document.getElementById('gain');
+    const r = document.getElementById('r');
+    const g = document.getElementById('g');
+    const b = document.getElementById('b');
+    const w = document.getElementById('w');
+    const colorPicker = document.getElementById('colorPicker');
+    const preview = document.getElementById('preview');
+
+    function connectWs() {
+      const loc = window.location;
+      const wsUri = (loc.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + loc.host + '/ws';
+      ws = new WebSocket(wsUri);
+
+      ws.onopen = () => {
+        statusEl.textContent = 'Connected';
+        statusEl.className = 'status-badge connected';
+      };
+
+      ws.onclose = () => {
+        statusEl.textContent = 'Disconnected';
+        statusEl.className = 'status-badge';
+        setTimeout(connectWs, 2000);
+      };
+
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === 'state') {
+            patternToggle.checked = msg.pattern;
+            randomEffectToggle.checked = !!msg.randomEffect;
+            gain.value = msg.gain;
+            r.value = msg.r;
+            g.value = msg.g;
+            b.value = msg.b;
+            w.value = msg.w;
+            syncFromRgb(false);
+          }
+        } catch {}
+      };
+    }
+
+    function sendColor() {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'color',
+          gain: parseInt(gain.value),
+          r: parseInt(r.value),
+          g: parseInt(g.value),
+          b: parseInt(b.value),
+          w: parseInt(w.value)
+        }));
+      }
+    }
+
+    patternToggle.addEventListener('change', () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'pattern',
+          enabled: patternToggle.checked
+        }));
+      }
+    });
+
+    randomEffectToggle.addEventListener('change', () => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'randomEffect',
+          enabled: randomEffectToggle.checked
+        }));
+      }
+    });
+
+    function rgbToHex(red, green, blue) {
+      return '#' + [red, green, blue].map(x => {
+        const hex = parseInt(x).toString(16);
+        return hex.length === 1 ? '0' + hex : hex;
+      }).join('');
+    }
+
+    function syncFromRgb(send = true) {
+      document.getElementById('gainVal').textContent = gain.value;
+      document.getElementById('rVal').textContent = r.value;
+      document.getElementById('gVal').textContent = g.value;
+      document.getElementById('bVal').textContent = b.value;
+      document.getElementById('wVal').textContent = w.value;
+
+      const hex = rgbToHex(r.value, g.value, b.value);
+      colorPicker.value = hex;
+      document.getElementById('hexLabel').textContent = hex.toUpperCase() + (w.value > 0 ? ` + W:${w.value}` : '');
+
+      const gNorm = gain.value / 255;
+      const rEff = Math.min(255, Math.round((parseInt(r.value) + parseInt(w.value)) * gNorm));
+      const gEff = Math.min(255, Math.round((parseInt(g.value) + parseInt(w.value)) * gNorm));
+      const bEff = Math.min(255, Math.round((parseInt(b.value) + parseInt(w.value)) * gNorm));
+      preview.style.background = `rgb(${rEff}, ${gEff}, ${bEff})`;
+
+      if (send) sendColor();
+    }
+
+    colorPicker.addEventListener('input', (e) => {
+      const hex = e.target.value;
+      r.value = parseInt(hex.substr(1, 2), 16);
+      g.value = parseInt(hex.substr(3, 2), 16);
+      b.value = parseInt(hex.substr(5, 2), 16);
+      syncFromRgb(true);
+    });
+
+    [gain, r, g, b, w].forEach(input => {
+      input.addEventListener('input', () => syncFromRgb(true));
+    });
+
+    function setPreset(pr, pg, pb, pw) {
+      r.value = pr;
+      g.value = pg;
+      b.value = pb;
+      w.value = pw;
+      syncFromRgb(true);
+    }
+
+    function blackout() {
+      gain.value = 0;
+      r.value = 0;
+      g.value = 0;
+      b.value = 0;
+      w.value = 0;
+      syncFromRgb(true);
+    }
+
+    connectWs();
+    syncFromRgb(false);
+  </script>
+</body>
+</html>
