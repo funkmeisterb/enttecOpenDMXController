@@ -34,6 +34,26 @@ This application connects directly to the FTDI device using native FTDI drivers,
   - Web Audio API envelope follower with real-time waveform, frequency bar, and glowing envelope visualizations.
   - Dynamically triggers the fixture's **White** channel (`0–255`) matched to audio transients and dynamics, streaming updates to the C# backend via WebSockets.
   - Interactive Sensitivity and Smoothing slider controls.
+- **Webcam Shader-Based VFX Engine (WebGL)**:
+  - Real-time hardware-accelerated video shader engine running at 60 FPS directly on the webcam stream.
+  - **11 Custom VFX Shaders**:
+    - **Ghost**: Motion-detected ethereal aura and delayed ghostly echoes.
+    - **Color Ghost**: Chromatic RGB separation on motion leaving multi-colored spectral trails.
+    - **Trail**: Phosphor-like motion persistence and light accumulation trails.
+    - **Shuffle**: Spatial block shuffling and pseudo-random mosaic glitch permutation.
+    - **Twist**: Interactive vortex swirl around an interactive center coordinate.
+    - **Dent**: Concave spherical dent distortion depressing pixels inward with quadratic falloff.
+    - **Pinch**: Lens pinch warp contracting pixels towards the center point.
+    - **Bulge**: Convex fisheye sphere magnification expanding pixels outward.
+    - **Wedge**: Polar kaleidoscope reflection slicing video into rotating geometric angular sectors.
+    - **Night Vision**: Green phosphor light amplifier with high-gain luma boost, CRT scanlines, vignette, and animated scintillation noise.
+    - **Thermal**: Infrared FLIR / Ironbow false-color heatmap spectrum mapped from pixel luminance.
+  - **Interactive Features**:
+    - Click & drag on video to dynamically reposition distortion centers for Twist, Dent, Pinch, Bulge, and Wedge.
+    - High-resolution snapshot export (PNG download).
+    - Horizontal video mirroring toggle.
+    - Fullscreen display mode.
+    - Contextual parameter sliders (Strength, Radius, Persistence, Speed, etc.).
 
 ---
 

@@ -24,7 +24,7 @@
     }
     .container {
       width: 100%;
-      max-width: 480px;
+      max-width: 520px;
       display: flex;
       flex-direction: column;
       gap: 20px;
@@ -264,6 +264,171 @@
       box-shadow: 0 0 8px #ffffff;
       transition: width 0.04s ease-out;
     }
+
+    /* Webcam Shader VFX Styles */
+    .vfx-canvas-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      background: #090a0f;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: crosshair;
+      user-select: none;
+      touch-action: none;
+    }
+    .vfx-canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      background: #000;
+    }
+    .vfx-placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: rgba(18, 20, 26, 0.96);
+      color: var(--muted);
+      text-align: center;
+      padding: 18px;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+    .vfx-center-marker {
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      border: 2px dashed #60a5fa;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      box-shadow: 0 0 10px rgba(96, 165, 250, 0.8);
+      display: none;
+      z-index: 5;
+    }
+    .vfx-center-marker::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 4px;
+      height: 4px;
+      background: #ffffff;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .vfx-actions-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .btn-vfx {
+      background: #334155;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.8rem;
+      font-weight: 500;
+      padding: 7px 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.15s, border-color 0.15s, transform 0.05s;
+    }
+    .btn-vfx:hover {
+      background: #475569;
+      border-color: #64748b;
+    }
+    .btn-vfx:active {
+      transform: scale(0.97);
+    }
+    .btn-vfx.primary {
+      background: var(--accent);
+      color: white;
+      border-color: #2563eb;
+    }
+    .btn-vfx.primary:hover {
+      background: #2563eb;
+    }
+    .btn-vfx.danger {
+      background: #dc2626;
+      color: white;
+      border-color: #b91c1c;
+    }
+    .btn-vfx.danger:hover {
+      background: #b91c1c;
+    }
+    .btn-vfx:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .vfx-select {
+      background: #1e293b;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.85rem;
+      padding: 7px 10px;
+      cursor: pointer;
+      flex: 1;
+      min-width: 150px;
+      outline: none;
+    }
+    .vfx-select:focus {
+      border-color: var(--accent);
+    }
+    .vfx-presets {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+    @media (max-width: 440px) {
+      .vfx-presets {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+    .btn-vfx-preset {
+      background: #1e293b;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 7px 4px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .btn-vfx-preset:hover {
+      background: #334155;
+      color: var(--text);
+    }
+    .btn-vfx-preset.active {
+      background: var(--accent);
+      color: white;
+      border-color: #60a5fa;
+      box-shadow: 0 0 8px rgba(59, 130, 246, 0.4);
+    }
+    .vfx-hint {
+      font-size: 0.75rem;
+      color: #60a5fa;
+      font-style: italic;
+      display: none;
+    }
   </style>
 </head>
 
@@ -360,6 +525,98 @@
       </div>
     </div>
 
+    <!-- Webcam Shader VFX Card -->
+    <div class="card" id="webcamCard">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div class="card-title">Webcam Shader VFX</div>
+        <span id="vfxCamStatus" class="status-badge" style="background:#475569;">Camera Off</span>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="vfx-actions-bar">
+        <button id="vfxCamToggleBtn" class="btn-vfx primary">
+          <span>📹</span> <span id="vfxCamToggleText">Start Camera</span>
+        </button>
+        <button id="vfxMirrorBtn" class="btn-vfx" title="Mirror video feed horizontally">
+          <span>🪞</span> <span id="vfxMirrorText">Mirror: On</span>
+        </button>
+        <button id="vfxSnapshotBtn" class="btn-vfx" disabled title="Capture high-res PNG frame">
+          <span>📸</span> Snapshot
+        </button>
+        <button id="vfxFullscreenBtn" class="btn-vfx" title="Toggle Fullscreen">
+          <span>⛶</span> Fullscreen
+        </button>
+      </div>
+
+      <!-- Canvas Wrap -->
+      <div class="vfx-canvas-wrap" id="vfxCanvasWrap" title="Click or drag to position warp center">
+        <canvas id="vfxCanvas" class="vfx-canvas" width="640" height="480"></canvas>
+        <div id="vfxCenterMarker" class="vfx-center-marker"></div>
+        <div id="vfxPlaceholder" class="vfx-placeholder">
+          <div style="font-size:2rem;">📷</div>
+          <div style="font-weight:600; font-size:0.95rem; color:var(--text);">Camera Inactive</div>
+          <div style="font-size:0.8rem; max-width:280px; line-height:1.4;">
+            Click <b>"Start Camera"</b> above to grant webcam access and run real-time hardware shaders.
+          </div>
+        </div>
+      </div>
+
+      <!-- Effect Selection -->
+      <div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div style="font-size:0.85rem; font-weight:600;">Active Shader Effect</div>
+          <select id="vfxSelect" class="vfx-select" style="max-width:180px;">
+            <option value="normal">Normal (Bypass)</option>
+            <option value="ghost">Ghost</option>
+            <option value="color_ghost">Color Ghost</option>
+            <option value="trail">Trail</option>
+            <option value="shuffle">Shuffle</option>
+            <option value="twist">Twist</option>
+            <option value="dent">Dent</option>
+            <option value="pinch">Pinch</option>
+            <option value="bulge">Bulge</option>
+            <option value="wedge">Wedge</option>
+            <option value="night_vision">Night Vision</option>
+            <option value="thermal">Thermal</option>
+          </select>
+        </div>
+
+        <div class="vfx-presets" id="vfxPresetsList">
+          <button class="btn-vfx-preset active" data-vfx="normal">Normal</button>
+          <button class="btn-vfx-preset" data-vfx="ghost">Ghost</button>
+          <button class="btn-vfx-preset" data-vfx="color_ghost">Color Ghost</button>
+          <button class="btn-vfx-preset" data-vfx="trail">Trail</button>
+          <button class="btn-vfx-preset" data-vfx="shuffle">Shuffle</button>
+          <button class="btn-vfx-preset" data-vfx="twist">Twist</button>
+          <button class="btn-vfx-preset" data-vfx="dent">Dent</button>
+          <button class="btn-vfx-preset" data-vfx="pinch">Pinch</button>
+          <button class="btn-vfx-preset" data-vfx="bulge">Bulge</button>
+          <button class="btn-vfx-preset" data-vfx="wedge">Wedge</button>
+          <button class="btn-vfx-preset" data-vfx="night_vision">Night Vision</button>
+          <button class="btn-vfx-preset" data-vfx="thermal">Thermal</button>
+        </div>
+      </div>
+
+      <!-- Parameter Sliders -->
+      <div id="vfxControlsArea" style="display:flex; flex-direction:column; gap:12px;">
+        <div class="row" id="vfxP1Row">
+          <label id="vfxP1Label" style="font-size:0.85rem;">Strength</label>
+          <input type="range" id="vfxP1" min="0" max="100" value="50">
+          <span id="vfxP1Val" class="slider-val">1.00</span>
+        </div>
+        <div class="row" id="vfxP2Row">
+          <label id="vfxP2Label" style="font-size:0.85rem;">Radius / Decay</label>
+          <input type="range" id="vfxP2" min="0" max="100" value="50">
+          <span id="vfxP2Val" class="slider-val">0.45</span>
+        </div>
+        <div id="vfxHint" class="vfx-hint">
+          ✦ Drag directly on the video to move the warp center (double-click to reset)
+        </div>
+      </div>
+
+      <!-- Hidden video stream element -->
+      <video id="vfxVideo" playsinline autoplay muted style="display:none;"></video>
+    </div>
 
     <div class="card" id="controlsCard">
       <div class="card-title">Gain + RGBW Control</div>
@@ -941,6 +1198,678 @@
 
       animFrameId = requestAnimationFrame(render);
     }
+
+    // ==========================================
+    // Webcam Shader-Based VFX Engine (WebGL)
+    // ==========================================
+    const vfxCanvas = document.getElementById('vfxCanvas');
+    const vfxCanvasWrap = document.getElementById('vfxCanvasWrap');
+    const vfxVideo = document.getElementById('vfxVideo');
+    const vfxCamStatus = document.getElementById('vfxCamStatus');
+    const vfxCamToggleBtn = document.getElementById('vfxCamToggleBtn');
+    const vfxCamToggleText = document.getElementById('vfxCamToggleText');
+    const vfxMirrorBtn = document.getElementById('vfxMirrorBtn');
+    const vfxMirrorText = document.getElementById('vfxMirrorText');
+    const vfxSnapshotBtn = document.getElementById('vfxSnapshotBtn');
+    const vfxFullscreenBtn = document.getElementById('vfxFullscreenBtn');
+    const vfxPlaceholder = document.getElementById('vfxPlaceholder');
+    const vfxCenterMarker = document.getElementById('vfxCenterMarker');
+    const vfxSelect = document.getElementById('vfxSelect');
+    const vfxP1 = document.getElementById('vfxP1');
+    const vfxP1Label = document.getElementById('vfxP1Label');
+    const vfxP1Val = document.getElementById('vfxP1Val');
+    const vfxP2 = document.getElementById('vfxP2');
+    const vfxP2Label = document.getElementById('vfxP2Label');
+    const vfxP2Val = document.getElementById('vfxP2Val');
+    const vfxHint = document.getElementById('vfxHint');
+
+    let vfxStream = null;
+    let vfxAnimId = null;
+    let vfxStartTime = performance.now();
+    let vfxMirror = true;
+    let vfxCurrentEffect = 'normal';
+    let vfxCenter = { x: 0.5, y: 0.5 };
+    let isDraggingVfxCenter = false;
+
+    const VFX_CONFIGS = {
+      normal: { name: 'Normal', p1: { name: 'Gain', min: 0.2, max: 2, val: 1, step: 0.05, disabled: true }, p2: { name: 'N/A', min: 0, max: 1, val: 0.5, step: 0.05, disabled: true }, hasCenter: false },
+      ghost: { name: 'Ghost', p1: { name: 'Aura Boost', min: 0.1, max: 2.5, val: 1.0, step: 0.05 }, p2: { name: 'Persistence', min: 0.5, max: 0.98, val: 0.88, step: 0.01 }, hasCenter: false },
+      color_ghost: { name: 'Color Ghost', p1: { name: 'RGB Spread', min: 0.1, max: 2.5, val: 1.0, step: 0.05 }, p2: { name: 'Persistence', min: 0.5, max: 0.98, val: 0.88, step: 0.01 }, hasCenter: false },
+      trail: { name: 'Trail', p1: { name: 'Intensity', min: 0.1, max: 2.0, val: 1.0, step: 0.05 }, p2: { name: 'Trail Length', min: 0.7, max: 0.99, val: 0.93, step: 0.01 }, hasCenter: false },
+      shuffle: { name: 'Shuffle', p1: { name: 'Glitch Rate', min: 0.1, max: 2.0, val: 0.7, step: 0.05 }, p2: { name: 'Grid Size', min: 4, max: 32, val: 14, step: 1 }, hasCenter: false },
+      twist: { name: 'Twist', p1: { name: 'Swirl Angle', min: -2.5, max: 2.5, val: 0.9, step: 0.05 }, p2: { name: 'Radius', min: 0.1, max: 0.9, val: 0.45, step: 0.02 }, hasCenter: true },
+      dent: { name: 'Dent', p1: { name: 'Dent Depth', min: 0.1, max: 2.5, val: 1.0, step: 0.05 }, p2: { name: 'Radius', min: 0.1, max: 0.9, val: 0.45, step: 0.02 }, hasCenter: true },
+      pinch: { name: 'Pinch', p1: { name: 'Pinch Power', min: 0.1, max: 3.0, val: 1.2, step: 0.05 }, p2: { name: 'Radius', min: 0.1, max: 0.9, val: 0.45, step: 0.02 }, hasCenter: true },
+      bulge: { name: 'Bulge', p1: { name: 'Magnification', min: 0.1, max: 2.5, val: 1.0, step: 0.05 }, p2: { name: 'Radius', min: 0.1, max: 0.9, val: 0.45, step: 0.02 }, hasCenter: true },
+      wedge: { name: 'Wedge', p1: { name: 'Spin Speed', min: -2.0, max: 2.0, val: 0.5, step: 0.05 }, p2: { name: 'Sectors', min: 3, max: 24, val: 8, step: 1 }, hasCenter: true },
+      night_vision: { name: 'Night Vision', p1: { name: 'Luma Boost', min: 0.2, max: 2.5, val: 1.1, step: 0.05 }, p2: { name: 'Grain & Scan', min: 0.0, max: 2.0, val: 1.0, step: 0.05 }, hasCenter: false },
+      thermal: { name: 'Thermal', p1: { name: 'Contrast', min: 0.2, max: 2.5, val: 1.0, step: 0.05 }, p2: { name: 'Heat Offset', min: 0.0, max: 1.0, val: 0.5, step: 0.02 }, hasCenter: false }
+    };
+
+    const gl = vfxCanvas.getContext('webgl', { preserveDrawingBuffer: true, alpha: false }) ||
+               vfxCanvas.getContext('experimental-webgl', { preserveDrawingBuffer: true, alpha: false });
+
+    function createShader(glCtx, type, src) {
+      const s = glCtx.createShader(type);
+      glCtx.shaderSource(s, src);
+      glCtx.compileShader(s);
+      if (!glCtx.getShaderParameter(s, glCtx.COMPILE_STATUS)) {
+        console.error('[VFX Shader Error]', glCtx.getShaderInfoLog(s));
+        glCtx.deleteShader(s);
+        return null;
+      }
+      return s;
+    }
+
+    function createProgram(glCtx, vsSrc, fsSrc) {
+      const vs = createShader(glCtx, glCtx.VERTEX_SHADER, vsSrc);
+      const fs = createShader(glCtx, glCtx.FRAGMENT_SHADER, fsSrc);
+      const prog = glCtx.createProgram();
+      glCtx.attachShader(prog, vs);
+      glCtx.attachShader(prog, fs);
+      glCtx.linkProgram(prog);
+      if (!glCtx.getProgramParameter(prog, glCtx.LINK_STATUS)) {
+        console.error('[VFX Program Error]', glCtx.getProgramInfoLog(prog));
+        return null;
+      }
+      prog.a_pos = glCtx.getAttribLocation(prog, 'a_pos');
+      prog.uniforms = {
+        u_video: glCtx.getUniformLocation(prog, 'u_video'),
+        u_feedback: glCtx.getUniformLocation(prog, 'u_feedback'),
+        u_resolution: glCtx.getUniformLocation(prog, 'u_resolution'),
+        u_center: glCtx.getUniformLocation(prog, 'u_center'),
+        u_time: glCtx.getUniformLocation(prog, 'u_time'),
+        u_param1: glCtx.getUniformLocation(prog, 'u_param1'),
+        u_param2: glCtx.getUniformLocation(prog, 'u_param2'),
+        u_aspect: glCtx.getUniformLocation(prog, 'u_aspect'),
+        u_mirror: glCtx.getUniformLocation(prog, 'u_mirror')
+      };
+      return prog;
+    }
+
+    const VS_SOURCE = `
+      attribute vec2 a_pos;
+      varying vec2 v_uv;
+      void main() {
+        v_uv = (a_pos + 1.0) * 0.5;
+        gl_Position = vec4(a_pos, 0.0, 1.0);
+      }
+    `;
+
+    const FS_HEADER = `
+      precision highp float;
+      varying vec2 v_uv;
+      uniform sampler2D u_video;
+      uniform sampler2D u_feedback;
+      uniform vec2 u_resolution;
+      uniform vec2 u_center;
+      uniform float u_time;
+      uniform float u_param1;
+      uniform float u_param2;
+      uniform float u_aspect;
+      uniform bool u_mirror;
+
+      vec2 getUv() {
+        return u_mirror ? vec2(1.0 - v_uv.x, v_uv.y) : v_uv;
+      }
+    `;
+
+    const FS_BLIT = `
+      precision highp float;
+      varying vec2 v_uv;
+      uniform sampler2D u_tex;
+      void main() {
+        gl_FragColor = texture2D(u_tex, v_uv);
+      }
+    `;
+
+    const SHADER_SOURCES = {
+      normal: FS_HEADER + `
+        void main() {
+          vec2 uv = getUv();
+          gl_FragColor = texture2D(u_video, uv);
+        }
+      `,
+      ghost: FS_HEADER + `
+        void main() {
+          vec2 uv = getUv();
+          vec4 curr = texture2D(u_video, uv);
+          vec4 prev = texture2D(u_feedback, v_uv);
+          float boost = u_param1;
+          float persist = u_param2;
+          float diff = length(curr.rgb - prev.rgb);
+          vec3 aura = vec3(0.2, 0.6, 1.0) * diff * boost * 1.5;
+          vec3 ghost = prev.rgb * persist + aura;
+          vec3 result = mix(curr.rgb, max(curr.rgb, ghost), persist);
+          gl_FragColor = vec4(result, 1.0);
+        }
+      `,
+      color_ghost: FS_HEADER + `
+        void main() {
+          vec2 uv = getUv();
+          vec4 curr = texture2D(u_video, uv);
+          float spread = u_param1 * 0.025;
+          float persist = u_param2;
+          vec2 dir = normalize(v_uv - u_center + vec2(0.0001));
+          vec2 uvR = clamp(v_uv + dir * spread, 0.0, 1.0);
+          vec2 uvB = clamp(v_uv - dir * spread, 0.0, 1.0);
+          vec4 prevC = texture2D(u_feedback, v_uv);
+          vec4 prevR = texture2D(u_feedback, uvR);
+          vec4 prevB = texture2D(u_feedback, uvB);
+          float r = mix(curr.r, prevR.r, persist);
+          float g = mix(curr.g, prevC.g, persist * 0.92);
+          float b = mix(curr.b, prevB.b, persist * 0.84);
+          float diff = length(curr.rgb - prevC.rgb);
+          vec3 tint = vec3(diff * 0.8, diff * 0.2, diff * 1.2) * u_param1;
+          gl_FragColor = vec4(r + tint.r, g + tint.g, b + tint.b, 1.0);
+        }
+      `,
+      trail: FS_HEADER + `
+        void main() {
+          vec2 uv = getUv();
+          vec4 curr = texture2D(u_video, uv);
+          vec4 prev = texture2D(u_feedback, v_uv);
+          float intensity = u_param1;
+          float decay = u_param2;
+          vec3 accumulated = prev.rgb * decay;
+          vec3 result = mix(curr.rgb, max(curr.rgb, accumulated), intensity);
+          gl_FragColor = vec4(result, 1.0);
+        }
+      `,
+      shuffle: FS_HEADER + `
+        float hash21(vec2 p) {
+          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+        }
+        void main() {
+          vec2 uv = getUv();
+          float gridCount = max(4.0, floor(u_param2));
+          vec2 cell = floor(uv * gridCount);
+          float timeStep = floor(u_time * (2.0 + u_param1 * 8.0));
+          float h1 = hash21(cell + vec2(timeStep * 0.17, 3.1));
+          float h2 = hash21(cell + vec2(timeStep * 0.23, 7.9));
+          float prob = u_param1 * 0.85;
+          if (h1 < prob) {
+            vec2 offset = (vec2(h1, h2) - 0.5) * 0.6;
+            uv = fract(uv + offset);
+          }
+          gl_FragColor = texture2D(u_video, uv);
+        }
+      `,
+      twist: FS_HEADER + `
+        void main() {
+          vec2 uv = getUv();
+          vec2 center = u_mirror ? vec2(1.0 - u_center.x, u_center.y) : u_center;
+          vec2 st = (uv - center) * vec2(u_aspect, 1.0);
+          float dist = length(st);
+          float radius = max(0.05, u_param2);
+          if (dist < radius) {
+            float norm = (1.0 - dist / radius);
+            float angle = norm * norm * u_param1 * 8.0;
+            float s = sin(angle);
+            float c = cos(angle);
+            st = vec2(st.x * c - st.y * s, st.x * s + st.y * c);
+            uv = center + st / vec2(u_aspect, 1.0);
+          }
+          gl_FragColor = texture2D(u_video, clamp(uv, 0.0, 1.0));
+        }
+      `
+    };
+
+    Object.assign(SHADER_SOURCES, {
+      dent: FS_HEADER + `
+        void main() {
+          vec2 uv = getUv();
+          vec2 center = u_mirror ? vec2(1.0 - u_center.x, u_center.y) : u_center;
+          vec2 st = (uv - center) * vec2(u_aspect, 1.0);
+          float dist = length(st);
+          float radius = max(0.05, u_param2);
+          if (dist < radius && dist > 0.0001) {
+            float norm = dist / radius;
+            float warp = pow(norm, 1.0 + u_param1 * 2.5);
+            st = (st / dist) * (warp * radius);
+            uv = center + st / vec2(u_aspect, 1.0);
+          }
+          gl_FragColor = texture2D(u_video, clamp(uv, 0.0, 1.0));
+        }
+      `,
+      pinch: FS_HEADER + `
+        void main() {
+          vec2 uv = getUv();
+          vec2 center = u_mirror ? vec2(1.0 - u_center.x, u_center.y) : u_center;
+          vec2 st = (uv - center) * vec2(u_aspect, 1.0);
+          float dist = length(st);
+          float radius = max(0.05, u_param2);
+          if (dist < radius && dist > 0.0001) {
+            float norm = dist / radius;
+            float factor = pow(norm, 1.0 + u_param1 * 2.0);
+            st = (st / dist) * (factor * radius);
+            uv = center + st / vec2(u_aspect, 1.0);
+          }
+          gl_FragColor = texture2D(u_video, clamp(uv, 0.0, 1.0));
+        }
+      `,
+      bulge: FS_HEADER + `
+        void main() {
+          vec2 uv = getUv();
+          vec2 center = u_mirror ? vec2(1.0 - u_center.x, u_center.y) : u_center;
+          vec2 st = (uv - center) * vec2(u_aspect, 1.0);
+          float dist = length(st);
+          float radius = max(0.05, u_param2);
+          if (dist < radius && dist > 0.0001) {
+            float norm = dist / radius;
+            float warp = sin(norm * 1.57079632679);
+            warp = mix(norm, warp, u_param1);
+            st = (st / dist) * (warp * radius);
+            uv = center + st / vec2(u_aspect, 1.0);
+          }
+          gl_FragColor = texture2D(u_video, clamp(uv, 0.0, 1.0));
+        }
+      `,
+      wedge: FS_HEADER + `
+        void main() {
+          vec2 uv = getUv();
+          vec2 center = u_mirror ? vec2(1.0 - u_center.x, u_center.y) : u_center;
+          vec2 st = (uv - center) * vec2(u_aspect, 1.0);
+          float r = length(st);
+          float theta = atan(st.y, st.x) + 3.14159265;
+          float sectors = max(2.0, floor(u_param2));
+          float sectorAngle = 6.2831853 / sectors;
+          float modAngle = mod(theta, sectorAngle);
+          if (mod(floor(theta / sectorAngle), 2.0) == 1.0) {
+            modAngle = sectorAngle - modAngle;
+          }
+          modAngle += u_time * (u_param1 * 0.4);
+          st = vec2(cos(modAngle), sin(modAngle)) * r;
+          uv = center + st / vec2(u_aspect, 1.0);
+          gl_FragColor = texture2D(u_video, clamp(uv, 0.0, 1.0));
+        }
+      `
+    });
+
+    Object.assign(SHADER_SOURCES, {
+      night_vision: FS_HEADER + `
+        void main() {
+          vec2 uv = getUv();
+          vec4 col = texture2D(u_video, uv);
+          float lum = dot(col.rgb, vec3(0.299, 0.587, 0.114));
+          float gain = 1.0 + u_param1 * 2.5;
+          lum = clamp(pow(lum * gain, 0.75), 0.0, 1.0);
+          vec3 greenTone = vec3(lum * 0.15, lum * 1.25, lum * 0.3);
+          float scanline = sin(v_uv.y * u_resolution.y * 1.5) * (0.06 * u_param2);
+          greenTone -= scanline;
+          vec2 vigCoord = (v_uv - vec2(0.5)) * vec2(u_aspect, 1.0);
+          float vig = 1.0 - smoothstep(0.35, 0.7, length(vigCoord));
+          greenTone *= vig;
+          float noise = (fract(sin(dot(v_uv + fract(u_time * 17.0), vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * (0.15 * u_param2);
+          greenTone += vec3(noise * 0.3, noise, noise * 0.4);
+          gl_FragColor = vec4(clamp(greenTone, 0.0, 1.0), 1.0);
+        }
+      `,
+      thermal: FS_HEADER + `
+        vec3 ironbow(float t) {
+          t = clamp(t, 0.0, 1.0);
+          vec3 c0 = vec3(0.02, 0.0, 0.15);
+          vec3 c1 = vec3(0.12, 0.1, 0.75);
+          vec3 c2 = vec3(0.85, 0.12, 0.15);
+          vec3 c3 = vec3(1.0, 0.85, 0.05);
+          vec3 c4 = vec3(1.0, 1.0, 1.0);
+          if (t < 0.25) return mix(c0, c1, t / 0.25);
+          else if (t < 0.50) return mix(c1, c2, (t - 0.25) / 0.25);
+          else if (t < 0.75) return mix(c2, c3, (t - 0.50) / 0.25);
+          else return mix(c3, c4, (t - 0.75) / 0.25);
+        }
+        void main() {
+          vec2 uv = getUv();
+          vec4 col = texture2D(u_video, uv);
+          float lum = dot(col.rgb, vec3(0.299, 0.587, 0.114));
+          float contrast = 0.5 + u_param1 * 1.5;
+          float offset = (u_param2 - 0.5) * 0.4;
+          lum = clamp((lum - 0.5 + offset) * contrast + 0.5, 0.0, 1.0);
+          vec3 heat = ironbow(lum);
+          gl_FragColor = vec4(heat, 1.0);
+        }
+      `
+    });
+
+    let quadBuffer = null;
+    let blitProgram = null;
+    let videoTexture = null;
+    const vfxPrograms = {};
+    let fbo0 = null;
+    let fbo1 = null;
+    let readFbo = null;
+    let writeFbo = null;
+
+    if (gl) {
+      quadBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1, -1,
+         1, -1,
+        -1,  1,
+        -1,  1,
+         1, -1,
+         1,  1
+      ]), gl.STATIC_DRAW);
+
+      const blitVs = createShader(gl, gl.VERTEX_SHADER, VS_SOURCE);
+      const blitFs = createShader(gl, gl.FRAGMENT_SHADER, FS_BLIT);
+      blitProgram = gl.createProgram();
+      gl.attachShader(blitProgram, blitVs);
+      gl.attachShader(blitProgram, blitFs);
+      gl.linkProgram(blitProgram);
+      blitProgram.a_pos = gl.getAttribLocation(blitProgram, 'a_pos');
+      blitProgram.uniforms = {
+        u_tex: gl.getUniformLocation(blitProgram, 'u_tex')
+      };
+
+      videoTexture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, videoTexture);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+      for (const [key, fsSource] of Object.entries(SHADER_SOURCES)) {
+        const prog = createProgram(gl, VS_SOURCE, fsSource);
+        if (prog) vfxPrograms[key] = prog;
+      }
+    }
+
+    function createFbo(width, height) {
+      if (!gl) return null;
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+      const fbo = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      return { fbo, tex, width, height };
+    }
+
+    function initFbos(width, height) {
+      if (!gl) return;
+      if (fbo0) {
+        gl.deleteTexture(fbo0.tex);
+        gl.deleteFramebuffer(fbo0.fbo);
+      }
+      if (fbo1) {
+        gl.deleteTexture(fbo1.tex);
+        gl.deleteFramebuffer(fbo1.fbo);
+      }
+      fbo0 = createFbo(width, height);
+      fbo1 = createFbo(width, height);
+      readFbo = fbo0;
+      writeFbo = fbo1;
+    }
+
+    function renderVfxLoop(now) {
+      if (!vfxStream || !gl) return;
+      vfxAnimId = requestAnimationFrame(renderVfxLoop);
+
+      if (vfxVideo.readyState < vfxVideo.HAVE_CURRENT_DATA) return;
+
+      if (vfxVideo.videoWidth && (vfxCanvas.width !== vfxVideo.videoWidth || vfxCanvas.height !== vfxVideo.videoHeight)) {
+        vfxCanvas.width = vfxVideo.videoWidth;
+        vfxCanvas.height = vfxVideo.videoHeight;
+        initFbos(vfxCanvas.width, vfxCanvas.height);
+      }
+
+      const elapsed = (now - vfxStartTime) * 0.001;
+      const prog = vfxPrograms[vfxCurrentEffect] || vfxPrograms.normal;
+
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, videoTexture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, vfxVideo);
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, writeFbo.fbo);
+      gl.viewport(0, 0, vfxCanvas.width, vfxCanvas.height);
+
+      gl.useProgram(prog);
+      gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+      gl.enableVertexAttribArray(prog.a_pos);
+      gl.vertexAttribPointer(prog.a_pos, 2, gl.FLOAT, false, 0, 0);
+
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, readFbo.tex);
+
+      if (prog.uniforms.u_video) gl.uniform1i(prog.uniforms.u_video, 0);
+      if (prog.uniforms.u_feedback) gl.uniform1i(prog.uniforms.u_feedback, 1);
+      if (prog.uniforms.u_resolution) gl.uniform2f(prog.uniforms.u_resolution, vfxCanvas.width, vfxCanvas.height);
+      if (prog.uniforms.u_center) gl.uniform2f(prog.uniforms.u_center, vfxCenter.x, 1.0 - vfxCenter.y);
+      if (prog.uniforms.u_time) gl.uniform1f(prog.uniforms.u_time, elapsed);
+      if (prog.uniforms.u_param1) gl.uniform1f(prog.uniforms.u_param1, parseFloat(vfxP1.value));
+      if (prog.uniforms.u_param2) gl.uniform1f(prog.uniforms.u_param2, parseFloat(vfxP2.value));
+      if (prog.uniforms.u_aspect) gl.uniform1f(prog.uniforms.u_aspect, vfxCanvas.width / vfxCanvas.height);
+      if (prog.uniforms.u_mirror) gl.uniform1i(prog.uniforms.u_mirror, vfxMirror ? 1 : 0);
+
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, vfxCanvas.width, vfxCanvas.height);
+
+      gl.useProgram(blitProgram);
+      gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+      gl.enableVertexAttribArray(blitProgram.a_pos);
+      gl.vertexAttribPointer(blitProgram.a_pos, 2, gl.FLOAT, false, 0, 0);
+
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, writeFbo.tex);
+      if (blitProgram.uniforms.u_tex) gl.uniform1i(blitProgram.uniforms.u_tex, 0);
+
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+      const tmp = readFbo;
+      readFbo = writeFbo;
+      writeFbo = tmp;
+    }
+
+    function updateCenterFromEvent(e) {
+      const rect = vfxCanvasWrap.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+      vfxCenter.x = x;
+      vfxCenter.y = y;
+      updateCenterMarkerPosition();
+    }
+
+    function updateCenterMarkerPosition() {
+      vfxCenterMarker.style.left = (vfxCenter.x * 100) + '%';
+      vfxCenterMarker.style.top = (vfxCenter.y * 100) + '%';
+    }
+
+    vfxCanvasWrap.addEventListener('mousedown', (e) => {
+      const cfg = VFX_CONFIGS[vfxCurrentEffect];
+      if (!cfg || !cfg.hasCenter) return;
+      isDraggingVfxCenter = true;
+      updateCenterFromEvent(e);
+    });
+    window.addEventListener('mousemove', (e) => {
+      if (isDraggingVfxCenter) updateCenterFromEvent(e);
+    });
+    window.addEventListener('mouseup', () => {
+      isDraggingVfxCenter = false;
+    });
+
+    vfxCanvasWrap.addEventListener('touchstart', (e) => {
+      const cfg = VFX_CONFIGS[vfxCurrentEffect];
+      if (!cfg || !cfg.hasCenter) return;
+      isDraggingVfxCenter = true;
+      updateCenterFromEvent(e);
+    }, { passive: true });
+    window.addEventListener('touchmove', (e) => {
+      if (isDraggingVfxCenter) updateCenterFromEvent(e);
+    }, { passive: true });
+    window.addEventListener('touchend', () => {
+      isDraggingVfxCenter = false;
+    });
+
+    vfxCanvasWrap.addEventListener('dblclick', () => {
+      vfxCenter.x = 0.5;
+      vfxCenter.y = 0.5;
+      updateCenterMarkerPosition();
+    });
+
+    function setVfxEffect(effectKey) {
+      if (!VFX_CONFIGS[effectKey]) effectKey = 'normal';
+      vfxCurrentEffect = effectKey;
+      vfxSelect.value = effectKey;
+
+      document.querySelectorAll('.btn-vfx-preset').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.vfx === effectKey);
+      });
+
+      const cfg = VFX_CONFIGS[effectKey];
+      vfxP1Label.textContent = cfg.p1.name;
+      vfxP1.min = cfg.p1.min;
+      vfxP1.max = cfg.p1.max;
+      vfxP1.step = cfg.p1.step;
+      vfxP1.value = cfg.p1.val;
+      vfxP1Val.textContent = parseFloat(cfg.p1.val).toFixed(2);
+      vfxP1.disabled = !!cfg.p1.disabled;
+
+      vfxP2Label.textContent = cfg.p2.name;
+      vfxP2.min = cfg.p2.min;
+      vfxP2.max = cfg.p2.max;
+      vfxP2.step = cfg.p2.step;
+      vfxP2.value = cfg.p2.val;
+      vfxP2Val.textContent = parseFloat(cfg.p2.val).toFixed(2);
+      vfxP2.disabled = !!cfg.p2.disabled;
+
+      if (cfg.hasCenter) {
+        vfxHint.style.display = 'block';
+        vfxCenterMarker.style.display = 'block';
+        updateCenterMarkerPosition();
+      } else {
+        vfxHint.style.display = 'none';
+        vfxCenterMarker.style.display = 'none';
+      }
+    }
+
+    vfxSelect.addEventListener('change', (e) => setVfxEffect(e.target.value));
+
+    document.querySelectorAll('.btn-vfx-preset').forEach(btn => {
+      btn.addEventListener('click', () => setVfxEffect(btn.dataset.vfx));
+    });
+
+    vfxP1.addEventListener('input', () => {
+      vfxP1Val.textContent = parseFloat(vfxP1.value).toFixed(2);
+    });
+
+    vfxP2.addEventListener('input', () => {
+      vfxP2Val.textContent = parseFloat(vfxP2.value).toFixed(2);
+    });
+
+    vfxMirrorBtn.addEventListener('click', () => {
+      vfxMirror = !vfxMirror;
+      vfxMirrorText.textContent = 'Mirror: ' + (vfxMirror ? 'On' : 'Off');
+    });
+
+    vfxSnapshotBtn.addEventListener('click', () => {
+      if (!vfxStream) return;
+      vfxCanvas.toBlob((blob) => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `vfx-snapshot-${vfxCurrentEffect}-${Date.now()}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }, 'image/png');
+    });
+
+    vfxFullscreenBtn.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        if (vfxCanvasWrap.requestFullscreen) {
+          vfxCanvasWrap.requestFullscreen();
+        } else if (vfxCanvasWrap.webkitRequestFullscreen) {
+          vfxCanvasWrap.webkitRequestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        }
+      }
+    });
+
+    async function startWebcam() {
+      try {
+        vfxCamStatus.textContent = 'Connecting...';
+        vfxCamStatus.style.background = '#f59e0b';
+
+        let stream = null;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+            audio: false
+          });
+        } catch (e1) {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
+
+        vfxStream = stream;
+        vfxVideo.srcObject = stream;
+        await vfxVideo.play();
+
+        vfxCamStatus.textContent = 'Camera Live';
+        vfxCamStatus.style.background = '#10b981';
+        vfxCamToggleBtn.className = 'btn-vfx danger';
+        vfxCamToggleText.textContent = 'Stop Camera';
+        vfxSnapshotBtn.disabled = false;
+        vfxPlaceholder.style.display = 'none';
+
+        vfxCanvas.width = vfxVideo.videoWidth || 640;
+        vfxCanvas.height = vfxVideo.videoHeight || 480;
+        initFbos(vfxCanvas.width, vfxCanvas.height);
+
+        vfxStartTime = performance.now();
+        if (vfxAnimId) cancelAnimationFrame(vfxAnimId);
+        vfxAnimId = requestAnimationFrame(renderVfxLoop);
+      } catch (err) {
+        console.error('[Webcam VFX Error]', err);
+        vfxCamStatus.textContent = 'Camera Error';
+        vfxCamStatus.style.background = '#ef4444';
+        alert('Unable to access webcam: ' + (err.message || err.name || 'Permission denied'));
+      }
+    }
+
+    function stopWebcam() {
+      if (vfxStream) {
+        vfxStream.getTracks().forEach(t => t.stop());
+        vfxStream = null;
+      }
+      vfxVideo.srcObject = null;
+      if (vfxAnimId) {
+        cancelAnimationFrame(vfxAnimId);
+        vfxAnimId = null;
+      }
+      vfxCamStatus.textContent = 'Camera Off';
+      vfxCamStatus.style.background = '#475569';
+      vfxCamToggleBtn.className = 'btn-vfx primary';
+      vfxCamToggleText.textContent = 'Start Camera';
+      vfxSnapshotBtn.disabled = true;
+      vfxPlaceholder.style.display = 'flex';
+    }
+
+    vfxCamToggleBtn.addEventListener('click', () => {
+      if (vfxStream) {
+        stopWebcam();
+      } else {
+        startWebcam();
+      }
+    });
+
+    setVfxEffect('normal');
 
     connectWs();
     syncFromRgb(false);
