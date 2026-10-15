@@ -154,6 +154,68 @@
     }
     input:checked + .slider-toggle { background-color: var(--accent); }
     input:checked + .slider-toggle:before { transform: translateX(22px); }
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+      background: rgba(255,255,255,0.02);
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(59,130,246,0.08);
+    }
+    .audio-canvas {
+      width: 100%;
+      height: 90px;
+      background: #0b0d13;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: block;
+    }
+    .audio-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn-audio {
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: opacity 0.2s;
+    }
+    .btn-audio:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .audio-info {
+      font-size: 0.8rem;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+    .envelope-meter {
+      height: 8px;
+      background: #27272a;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .envelope-fill {
+      height: 100%;
+      width: 0%;
+      background: #f8fafc;
+      box-shadow: 0 0 8px #ffffff;
+      transition: width 0.04s ease-out;
+    }
   </style>
 </head>
 
@@ -187,6 +249,49 @@
         </label>
       </div>
     </div>
+    <!-- Audio Envelope Reactive White Card -->
+    <div class="card" id="audioCard">
+      <div class="card-title">Audio Reactive (White Only)</div>
+      
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="audioFileInput" accept="audio/*" style="display:none;">
+        <div style="font-size:1.5rem; margin-bottom:4px;">🎵</div>
+        <div style="font-weight:600; font-size:0.9rem;">Drop audio file here, or click to browse</div>
+        <div style="font-size:0.75rem; color:var(--muted); margin-top:2px;">Supports MP3, WAV, OGG, AAC, FLAC</div>
+      </div>
+
+      <div class="audio-controls">
+        <button id="playBtn" class="btn-audio" disabled>Play</button>
+        <button id="stopBtn" class="btn-audio" style="background:#475569;" disabled>Stop</button>
+        <span id="audioTrackInfo" class="audio-info">No file loaded</span>
+        <span id="audioTime" style="font-size:0.75rem; font-family:monospace; color:var(--muted);">0:00</span>
+      </div>
+
+      <!-- Live Waveform & Envelope Canvas -->
+      <canvas id="visualizer" class="audio-canvas" width="440" height="90"></canvas>
+
+      <div>
+        <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;">
+          <span style="color:#f8fafc; font-weight:600;">White Envelope Level</span>
+          <span id="envelopeVal" style="font-family:monospace; color:var(--muted);">0 (0%)</span>
+        </div>
+        <div class="envelope-meter">
+          <div id="envelopeFill" class="envelope-fill"></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <label style="font-size:0.85rem;">Gain / Sens</label>
+        <input type="range" id="audioSens" min="50" max="300" value="130">
+        <span id="audioSensVal" class="slider-val">1.3x</span>
+      </div>
+      <div class="row">
+        <label style="font-size:0.85rem;">Smoothing</label>
+        <input type="range" id="audioSmoothing" min="1" max="95" value="70">
+        <span id="audioSmoothingVal" class="slider-val">0.70</span>
+      </div>
+    </div>
+
 
     <div class="card" id="controlsCard">
       <div class="card-title">Gain + RGBW Control</div>
@@ -369,6 +474,281 @@
       b.value = 0;
       w.value = 0;
       syncFromRgb(true);
+    }
+    // ==========================================
+    // Web Audio Envelope Follower & Visualizer
+    // ==========================================
+    let audioCtx = null;
+    let audioEl = new Audio();
+    let audioSourceNode = null;
+    let analyserNode = null;
+    let animFrameId = null;
+    let smoothedEnvelope = 0;
+    let lastSentW = -1;
+    let lastSendTime = 0;
+
+    const dropZone = document.getElementById('dropZone');
+    const audioFileInput = document.getElementById('audioFileInput');
+    const playBtn = document.getElementById('playBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const audioTrackInfo = document.getElementById('audioTrackInfo');
+    const audioTime = document.getElementById('audioTime');
+    const visualizer = document.getElementById('visualizer');
+    const canvasCtx = visualizer.getContext('2d');
+    const envelopeVal = document.getElementById('envelopeVal');
+    const envelopeFill = document.getElementById('envelopeFill');
+    const audioSens = document.getElementById('audioSens');
+    const audioSensVal = document.getElementById('audioSensVal');
+    const audioSmoothing = document.getElementById('audioSmoothing');
+    const audioSmoothingVal = document.getElementById('audioSmoothingVal');
+
+    audioSens.addEventListener('input', () => {
+      audioSensVal.textContent = (audioSens.value / 100).toFixed(1) + 'x';
+    });
+
+    audioSmoothing.addEventListener('input', () => {
+      audioSmoothingVal.textContent = (audioSmoothing.value / 100).toFixed(2);
+    });
+
+    dropZone.addEventListener('click', () => audioFileInput.click());
+
+    // Prevent browser default file open behavior across the whole window
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      window.addEventListener(eventName, (e) => {
+        e.preventDefault();
+      }, false);
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'dragend'].forEach(eventName => {
+      dropZone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropZone.classList.remove('dragover');
+      });
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        loadAudioFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    audioFileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        loadAudioFile(e.target.files[0]);
+      }
+    });
+
+    function initAudioContext() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        audioCtx = new AudioContextClass();
+        analyserNode = audioCtx.createAnalyser();
+        analyserNode.fftSize = 512;
+        analyserNode.smoothingTimeConstant = 0.3;
+
+        audioSourceNode = audioCtx.createMediaElementSource(audioEl);
+        audioSourceNode.connect(analyserNode);
+        analyserNode.connect(audioCtx.destination);
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    function loadAudioFile(file) {
+      if (!file) return;
+      initAudioContext();
+      const objectUrl = URL.createObjectURL(file);
+      audioEl.src = objectUrl;
+      audioTrackInfo.textContent = file.name;
+      playBtn.disabled = false;
+      stopBtn.disabled = false;
+      playBtn.textContent = 'Play';
+
+      audioEl.onerror = (err) => {
+        console.error('Audio playback error:', err);
+        audioTrackInfo.textContent = 'Error loading file: ' + file.name;
+      };
+
+      audioEl.onended = () => {
+        playBtn.textContent = 'Play';
+        sendWhiteOnly(0);
+      };
+
+      audioEl.ontimeupdate = () => {
+        const cur = formatTime(audioEl.currentTime);
+        const dur = isNaN(audioEl.duration) ? '0:00' : formatTime(audioEl.duration);
+        audioTime.textContent = `${cur} / ${dur}`;
+      };
+    }
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    playBtn.addEventListener('click', () => {
+      initAudioContext();
+      if (audioEl.paused) {
+        audioEl.play();
+        playBtn.textContent = 'Pause';
+        if (patternToggle.checked) {
+          patternToggle.checked = false;
+          patternToggle.dispatchEvent(new Event('change'));
+        }
+        if (randomEffectToggle.checked) {
+          randomEffectToggle.checked = false;
+          randomEffectToggle.dispatchEvent(new Event('change'));
+        }
+        startVisualizerLoop();
+      } else {
+        audioEl.pause();
+        playBtn.textContent = 'Play';
+        sendWhiteOnly(0);
+      }
+    });
+
+    stopBtn.addEventListener('click', () => {
+      audioEl.pause();
+      audioEl.currentTime = 0;
+      playBtn.textContent = 'Play';
+      sendWhiteOnly(0);
+    });
+
+    function sendWhiteOnly(whiteLevel) {
+      smoothedEnvelope = whiteLevel / 255;
+      updateEnvelopeMeter(whiteLevel);
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'color',
+          gain: 255,
+          r: 0,
+          g: 0,
+          b: 0,
+          w: whiteLevel
+        }));
+      }
+    }
+
+    function updateEnvelopeMeter(whiteLevel) {
+      const pct = Math.round((whiteLevel / 255) * 100);
+      envelopeVal.textContent = `${whiteLevel} (${pct}%)`;
+      envelopeFill.style.width = pct + '%';
+    }
+
+    function startVisualizerLoop() {
+      if (animFrameId) cancelAnimationFrame(animFrameId);
+
+      const bufferLength = analyserNode.frequencyBinCount;
+      const timeData = new Uint8Array(bufferLength);
+      const freqData = new Uint8Array(bufferLength);
+
+      function render(now) {
+        if (!audioEl.paused) {
+          animFrameId = requestAnimationFrame(render);
+        } else {
+          animFrameId = null;
+        }
+
+        analyserNode.getByteTimeDomainData(timeData);
+        analyserNode.getByteFrequencyData(freqData);
+
+        let sumSquares = 0;
+        let peak = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          const norm = (timeData[i] - 128) / 128.0;
+          sumSquares += norm * norm;
+          const absNorm = Math.abs(norm);
+          if (absNorm > peak) peak = absNorm;
+        }
+        const rms = Math.sqrt(sumSquares / bufferLength);
+
+        const sens = audioSens.value / 100;
+        const rawInstant = Math.min(1.0, (peak * 0.7 + rms * 0.3) * sens);
+
+        const smoothFactor = audioSmoothing.value / 100;
+        const attack = 1.0 - (smoothFactor * 0.4);
+        const release = 1.0 - (smoothFactor * 0.95);
+
+        if (rawInstant > smoothedEnvelope) {
+          smoothedEnvelope += (rawInstant - smoothedEnvelope) * attack;
+        } else {
+          smoothedEnvelope -= (smoothedEnvelope - rawInstant) * release;
+        }
+        smoothedEnvelope = Math.max(0, Math.min(1, smoothedEnvelope));
+
+        const targetW = Math.round(smoothedEnvelope * 255);
+        updateEnvelopeMeter(targetW);
+
+        if (now - lastSendTime >= 30) {
+          if (targetW !== lastSentW) {
+            lastSentW = targetW;
+            lastSendTime = now;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: 'color',
+                gain: 255,
+                r: 0,
+                g: 0,
+                b: 0,
+                w: targetW
+              }));
+            }
+          }
+        }
+
+        const w = visualizer.width;
+        const h = visualizer.height;
+        canvasCtx.fillStyle = '#0b0d13';
+        canvasCtx.fillRect(0, 0, w, h);
+
+        const barWidth = (w / bufferLength) * 2.5;
+        for (let i = 0; i < bufferLength; i++) {
+          const barHeight = (freqData[i] / 255) * (h * 0.7);
+          canvasCtx.fillStyle = 'rgba(59, 130, 246, 0.25)';
+          canvasCtx.fillRect(i * barWidth, h - barHeight, barWidth - 1, barHeight);
+        }
+
+        canvasCtx.lineWidth = 1.5;
+        canvasCtx.strokeStyle = '#94a3b8';
+        canvasCtx.beginPath();
+        const sliceWidth = w / bufferLength;
+        let x = 0;
+        for (let i = 0; i < bufferLength; i++) {
+          const v = timeData[i] / 128.0;
+          const y = (v * h) / 2;
+          if (i === 0) canvasCtx.moveTo(x, y);
+          else canvasCtx.lineTo(x, y);
+          x += sliceWidth;
+        }
+        canvasCtx.stroke();
+
+        const envY = h - (smoothedEnvelope * (h - 6)) - 3;
+        canvasCtx.strokeStyle = '#ffffff';
+        canvasCtx.shadowColor = '#ffffff';
+        canvasCtx.shadowBlur = 6;
+        canvasCtx.lineWidth = 2.5;
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(0, envY);
+        canvasCtx.lineTo(w, envY);
+        canvasCtx.stroke();
+        canvasCtx.shadowBlur = 0;
+      }
+
+      animFrameId = requestAnimationFrame(render);
     }
 
     connectWs();

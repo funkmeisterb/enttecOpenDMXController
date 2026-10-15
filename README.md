@@ -29,6 +29,11 @@ This application connects directly to the FTDI device using native FTDI drivers,
   - **RGBW Auto Pattern**: Interactive toggle in the web UI to cycle through Red, Green, Blue, and White.
   - **Random Lightning / Flicker Effect**: Interactive toggle simulating dynamic random lightning bursts and flicker, playing with stochastic Gain (brightness) and White levels, interspersed with micro-dips and random rest delays.
   - Smart state handling: automatically disengages active effects when manual color or slider adjustments are made.
+- **Audio Reactive Envelope Follower (White Only)**:
+  - Drag-and-drop audio playback (MP3, WAV, OGG, FLAC) directly inside the browser.
+  - Web Audio API envelope follower with real-time waveform, frequency bar, and glowing envelope visualizations.
+  - Dynamically triggers the fixture's **White** channel (`0–255`) matched to audio transients and dynamics, streaming updates to the C# backend via WebSockets.
+  - Interactive Sensitivity and Smoothing slider controls.
 
 ---
 
