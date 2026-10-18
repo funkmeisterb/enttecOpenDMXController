@@ -288,6 +288,63 @@
       display: block;
       background: #000;
     }
+    /* Fullscreen Mode Styles */
+    .vfx-canvas-wrap:fullscreen,
+    .vfx-canvas-wrap:-webkit-full-screen,
+    .vfx-canvas-wrap.is-fullscreen {
+      position: fixed !important;
+      inset: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: none !important;
+      max-height: none !important;
+      aspect-ratio: auto !important;
+      border: none !important;
+      border-radius: 0 !important;
+      background: #000000 !important;
+      z-index: 999999 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .vfx-canvas-wrap:fullscreen .vfx-canvas,
+    .vfx-canvas-wrap:-webkit-full-screen .vfx-canvas,
+    .vfx-canvas-wrap.is-fullscreen .vfx-canvas {
+      width: 100vw !important;
+      height: 100vh !important;
+      max-width: 100% !important;
+      max-height: 100% !important;
+      object-fit: contain !important;
+    }
+    .vfx-fs-close-btn {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      z-index: 100;
+      background: rgba(18, 20, 26, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #ffffff;
+      padding: 9px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: none;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+      transition: background 0.15s, transform 0.1s;
+    }
+    .vfx-fs-close-btn:hover {
+      background: rgba(220, 38, 38, 0.9);
+      border-color: #ef4444;
+      transform: scale(1.04);
+    }
+    .vfx-canvas-wrap:fullscreen .vfx-fs-close-btn,
+    .vfx-canvas-wrap:-webkit-full-screen .vfx-fs-close-btn,
+    .vfx-canvas-wrap.is-fullscreen .vfx-fs-close-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
     .vfx-placeholder {
       position: absolute;
       inset: 0;
@@ -540,6 +597,9 @@
         <button id="vfxMirrorBtn" class="btn-vfx" title="Mirror video feed horizontally">
           <span>🪞</span> <span id="vfxMirrorText">Mirror: On</span>
         </button>
+        <button id="vfxFlipYBtn" class="btn-vfx" title="Flip video feed vertically">
+          <span>⇅</span> <span id="vfxFlipYText">Flip V: Off</span>
+        </button>
         <button id="vfxSnapshotBtn" class="btn-vfx" disabled title="Capture high-res PNG frame">
           <span>📸</span> Snapshot
         </button>
@@ -549,8 +609,11 @@
       </div>
 
       <!-- Canvas Wrap -->
-      <div class="vfx-canvas-wrap" id="vfxCanvasWrap" title="Click or drag to position warp center">
+      <div class="vfx-canvas-wrap" id="vfxCanvasWrap" title="Click or drag to position warp center. Double-click for fullscreen.">
         <canvas id="vfxCanvas" class="vfx-canvas" width="640" height="480"></canvas>
+        <button id="vfxExitFsBtn" class="vfx-fs-close-btn" title="Exit Fullscreen (Esc)">
+          <span>✕</span> Exit Fullscreen
+        </button>
         <div id="vfxCenterMarker" class="vfx-center-marker"></div>
         <div id="vfxPlaceholder" class="vfx-placeholder">
           <div style="font-size:2rem;">📷</div>
@@ -610,7 +673,7 @@
           <span id="vfxP2Val" class="slider-val">0.45</span>
         </div>
         <div id="vfxHint" class="vfx-hint">
-          ✦ Drag directly on the video to move the warp center (double-click to reset)
+          ✦ Drag on video to position center · <button id="vfxResetCenterBtn" type="button" class="btn-vfx" style="padding:2px 8px; font-size:0.75rem;">Reset Center</button> · Double-click for Fullscreen
         </div>
       </div>
 
@@ -1210,10 +1273,14 @@
     const vfxCamToggleText = document.getElementById('vfxCamToggleText');
     const vfxMirrorBtn = document.getElementById('vfxMirrorBtn');
     const vfxMirrorText = document.getElementById('vfxMirrorText');
+    const vfxFlipYBtn = document.getElementById('vfxFlipYBtn');
+    const vfxFlipYText = document.getElementById('vfxFlipYText');
     const vfxSnapshotBtn = document.getElementById('vfxSnapshotBtn');
     const vfxFullscreenBtn = document.getElementById('vfxFullscreenBtn');
+    const vfxExitFsBtn = document.getElementById('vfxExitFsBtn');
     const vfxPlaceholder = document.getElementById('vfxPlaceholder');
     const vfxCenterMarker = document.getElementById('vfxCenterMarker');
+    const vfxResetCenterBtn = document.getElementById('vfxResetCenterBtn');
     const vfxSelect = document.getElementById('vfxSelect');
     const vfxP1 = document.getElementById('vfxP1');
     const vfxP1Label = document.getElementById('vfxP1Label');
@@ -1227,6 +1294,7 @@
     let vfxAnimId = null;
     let vfxStartTime = performance.now();
     let vfxMirror = true;
+    let vfxFlipY = false;
     let vfxCurrentEffect = 'normal';
     let vfxCenter = { x: 0.5, y: 0.5 };
     let isDraggingVfxCenter = false;
@@ -1624,6 +1692,7 @@
       const elapsed = (now - vfxStartTime) * 0.001;
       const prog = vfxPrograms[vfxCurrentEffect] || vfxPrograms.normal;
 
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, !vfxFlipY);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, videoTexture);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, vfxVideo);
@@ -1642,7 +1711,8 @@
       if (prog.uniforms.u_video) gl.uniform1i(prog.uniforms.u_video, 0);
       if (prog.uniforms.u_feedback) gl.uniform1i(prog.uniforms.u_feedback, 1);
       if (prog.uniforms.u_resolution) gl.uniform2f(prog.uniforms.u_resolution, vfxCanvas.width, vfxCanvas.height);
-      if (prog.uniforms.u_center) gl.uniform2f(prog.uniforms.u_center, vfxCenter.x, 1.0 - vfxCenter.y);
+      const cy = vfxFlipY ? vfxCenter.y : (1.0 - vfxCenter.y);
+      if (prog.uniforms.u_center) gl.uniform2f(prog.uniforms.u_center, vfxCenter.x, cy);
       if (prog.uniforms.u_time) gl.uniform1f(prog.uniforms.u_time, elapsed);
       if (prog.uniforms.u_param1) gl.uniform1f(prog.uniforms.u_param1, parseFloat(vfxP1.value));
       if (prog.uniforms.u_param2) gl.uniform1f(prog.uniforms.u_param2, parseFloat(vfxP2.value));
@@ -1670,23 +1740,47 @@
       writeFbo = tmp;
     }
 
+    function getRenderedVideoBounds() {
+      const rect = vfxCanvas.getBoundingClientRect();
+      const canvasAspect = (vfxCanvas.width && vfxCanvas.height) ? (vfxCanvas.width / vfxCanvas.height) : (4 / 3);
+      const elemAspect = rect.width / (rect.height || 1);
+      let renderW = rect.width;
+      let renderH = rect.height;
+      let renderX = rect.left;
+      let renderY = rect.top;
+
+      if (elemAspect > canvasAspect) {
+        renderW = rect.height * canvasAspect;
+        renderX = rect.left + (rect.width - renderW) / 2;
+      } else {
+        renderH = rect.width / canvasAspect;
+        renderY = rect.top + (rect.height - renderH) / 2;
+      }
+      return { renderX, renderY, renderW, renderH };
+    }
+
     function updateCenterFromEvent(e) {
-      const rect = vfxCanvasWrap.getBoundingClientRect();
+      const { renderX, renderY, renderW, renderH } = getRenderedVideoBounds();
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-      const x = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      const y = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+      const x = Math.max(0, Math.min(1, (clientX - renderX) / (renderW || 1)));
+      const y = Math.max(0, Math.min(1, (clientY - renderY) / (renderH || 1)));
       vfxCenter.x = x;
       vfxCenter.y = y;
       updateCenterMarkerPosition();
     }
 
     function updateCenterMarkerPosition() {
-      vfxCenterMarker.style.left = (vfxCenter.x * 100) + '%';
-      vfxCenterMarker.style.top = (vfxCenter.y * 100) + '%';
+      const { renderX, renderY, renderW, renderH } = getRenderedVideoBounds();
+      const wrapRect = vfxCanvasWrap.getBoundingClientRect();
+      const pxX = renderX - wrapRect.left + vfxCenter.x * renderW;
+      const pxY = renderY - wrapRect.top + vfxCenter.y * renderH;
+      vfxCenterMarker.style.left = pxX + 'px';
+      vfxCenterMarker.style.top = pxY + 'px';
     }
 
     vfxCanvasWrap.addEventListener('mousedown', (e) => {
+      if (e.target === vfxExitFsBtn) return;
       const cfg = VFX_CONFIGS[vfxCurrentEffect];
       if (!cfg || !cfg.hasCenter) return;
       isDraggingVfxCenter = true;
@@ -1700,6 +1794,7 @@
     });
 
     vfxCanvasWrap.addEventListener('touchstart', (e) => {
+      if (e.target === vfxExitFsBtn) return;
       const cfg = VFX_CONFIGS[vfxCurrentEffect];
       if (!cfg || !cfg.hasCenter) return;
       isDraggingVfxCenter = true;
@@ -1712,10 +1807,14 @@
       isDraggingVfxCenter = false;
     });
 
-    vfxCanvasWrap.addEventListener('dblclick', () => {
-      vfxCenter.x = 0.5;
-      vfxCenter.y = 0.5;
-      updateCenterMarkerPosition();
+    vfxCanvasWrap.addEventListener('contextmenu', (e) => {
+      const cfg = VFX_CONFIGS[vfxCurrentEffect];
+      if (cfg && cfg.hasCenter) {
+        e.preventDefault();
+        vfxCenter.x = 0.5;
+        vfxCenter.y = 0.5;
+        updateCenterMarkerPosition();
+      }
     });
 
     function setVfxEffect(effectKey) {
@@ -1773,6 +1872,21 @@
       vfxMirrorText.textContent = 'Mirror: ' + (vfxMirror ? 'On' : 'Off');
     });
 
+    vfxFlipYBtn.addEventListener('click', () => {
+      vfxFlipY = !vfxFlipY;
+      vfxFlipYText.textContent = 'Flip V: ' + (vfxFlipY ? 'On' : 'Off');
+      updateCenterMarkerPosition();
+    });
+
+    if (vfxResetCenterBtn) {
+      vfxResetCenterBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        vfxCenter.x = 0.5;
+        vfxCenter.y = 0.5;
+        updateCenterMarkerPosition();
+      });
+    }
+
     vfxSnapshotBtn.addEventListener('click', () => {
       if (!vfxStream) return;
       vfxCanvas.toBlob((blob) => {
@@ -1788,18 +1902,99 @@
       }, 'image/png');
     });
 
-    vfxFullscreenBtn.addEventListener('click', () => {
-      if (!document.fullscreenElement) {
-        if (vfxCanvasWrap.requestFullscreen) {
-          vfxCanvasWrap.requestFullscreen();
-        } else if (vfxCanvasWrap.webkitRequestFullscreen) {
-          vfxCanvasWrap.webkitRequestFullscreen();
+    function isFullscreenActive() {
+      return !!(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement ||
+        vfxCanvasWrap.classList.contains('is-fullscreen')
+      );
+    }
+
+    function updateFullscreenUi() {
+      const isFs = isFullscreenActive();
+      vfxFullscreenBtn.innerHTML = isFs ? '<span>🗗</span> Exit Fullscreen' : '<span>⛶</span> Fullscreen';
+      vfxFullscreenBtn.classList.toggle('primary', isFs);
+      if (!isFs) {
+        vfxCanvasWrap.classList.remove('is-fullscreen');
+      }
+      setTimeout(updateCenterMarkerPosition, 100);
+    }
+
+    async function toggleFullscreen() {
+      const isFs = isFullscreenActive();
+      if (!isFs) {
+        let enteredNative = false;
+        try {
+          if (vfxCanvasWrap.requestFullscreen) {
+            await vfxCanvasWrap.requestFullscreen();
+            enteredNative = true;
+          } else if (vfxCanvasWrap.webkitRequestFullscreen) {
+            vfxCanvasWrap.webkitRequestFullscreen();
+            enteredNative = true;
+          } else if (vfxCanvasWrap.mozRequestFullScreen) {
+            vfxCanvasWrap.mozRequestFullScreen();
+            enteredNative = true;
+          } else if (vfxCanvasWrap.msRequestFullscreen) {
+            vfxCanvasWrap.msRequestFullscreen();
+            enteredNative = true;
+          }
+        } catch (err) {
+          console.warn('[Native Fullscreen failed, falling back to CSS fullscreen]', err);
+        }
+        if (!enteredNative) {
+          vfxCanvasWrap.classList.add('is-fullscreen');
         }
       } else {
-        if (document.exitFullscreen) {
-          document.exitFullscreen();
+        try {
+          if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) {
+            if (document.exitFullscreen) {
+              await document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+              document.webkitExitFullscreen();
+            } else if (document.mozCancelFullScreen) {
+              document.mozCancelFullScreen();
+            } else if (document.msExitFullscreen) {
+              document.msExitFullscreen();
+            }
+          }
+        } catch (err) {
+          console.warn('[Exit Fullscreen error]', err);
         }
+        vfxCanvasWrap.classList.remove('is-fullscreen');
       }
+      updateFullscreenUi();
+    }
+
+    vfxFullscreenBtn.addEventListener('click', toggleFullscreen);
+
+    if (vfxExitFsBtn) {
+      vfxExitFsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleFullscreen();
+      });
+    }
+
+    vfxCanvasWrap.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      toggleFullscreen();
+    });
+
+    document.addEventListener('fullscreenchange', updateFullscreenUi);
+    document.addEventListener('webkitfullscreenchange', updateFullscreenUi);
+    document.addEventListener('mozfullscreenchange', updateFullscreenUi);
+    document.addEventListener('MSFullscreenChange', updateFullscreenUi);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && vfxCanvasWrap.classList.contains('is-fullscreen')) {
+        vfxCanvasWrap.classList.remove('is-fullscreen');
+        updateFullscreenUi();
+      }
+    });
+
+    window.addEventListener('resize', () => {
+      updateCenterMarkerPosition();
     });
 
     async function startWebcam() {

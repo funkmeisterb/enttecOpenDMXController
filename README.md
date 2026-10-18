@@ -51,8 +51,8 @@ This application connects directly to the FTDI device using native FTDI drivers,
   - **Interactive Features**:
     - Click & drag on video to dynamically reposition distortion centers for Twist, Dent, Pinch, Bulge, and Wedge.
     - High-resolution snapshot export (PNG download).
-    - Horizontal video mirroring toggle.
-    - Fullscreen display mode.
+    - Horizontal video mirroring toggle and vertical flip (Flip V) toggle.
+    - Fullscreen display mode (button, double-click to toggle, on-screen Exit button, Esc key, and fallback theater mode).
     - Contextual parameter sliders (Strength, Radius, Persistence, Speed, etc.).
 
 ---
