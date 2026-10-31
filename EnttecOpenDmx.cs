@@ -71,8 +71,8 @@ namespace dmxEasyDancing
             ref uint type,
             ref uint id,
             ref uint locId,
-            byte[] serialNumber,
-            byte[] description,
+            [Out] byte[] serialNumber,
+            [Out] byte[] description,
             ref IntPtr handle);
 
         [DllImport("FTD2XX.dll")]
@@ -88,7 +88,7 @@ namespace dmxEasyDancing
         private static extern FT_STATUS FT_ResetDevice(IntPtr handle);
 
         [DllImport("FTD2XX.dll")]
-        private static extern FT_STATUS FT_SetDivisor(IntPtr handle, char usDivisor);
+        private static extern FT_STATUS FT_SetBaudRate(IntPtr handle, uint dwBaudRate);
 
         [DllImport("FTD2XX.dll")]
         private static extern FT_STATUS FT_SetDataCharacteristics(IntPtr handle, byte uWordLength, byte uStopBits, byte uParity);
@@ -110,6 +110,15 @@ namespace dmxEasyDancing
 
         [DllImport("FTD2XX.dll")]
         private static extern FT_STATUS FT_Write(IntPtr handle, IntPtr lpBuffer, uint dwBytesToWrite, ref uint lpdwBytesWritten);
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_GetStatus(IntPtr handle, ref uint dwRxBytes, ref uint dwTxBytes, ref uint dwEventDWord);
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_SetDtr(IntPtr handle);
+
+        [DllImport("FTD2XX.dll")]
+        private static extern FT_STATUS FT_SetRts(IntPtr handle);
         #endregion
 
         private static void Log(string message)
@@ -162,8 +171,9 @@ namespace dmxEasyDancing
             return devices;
         }
 
-        private static void EnumerateD2xxDevices()
+        private static List<string> EnumerateD2xxDevices()
         {
+            var serials = new List<string>();
             try
             {
                 uint numDevs = 0;
@@ -176,15 +186,26 @@ namespace dmxEasyDancing
                     byte[] desc = new byte[64];
                     IntPtr dummyHandle = IntPtr.Zero;
                     FT_STATUS detailStatus = FT_GetDeviceInfoDetail(i, ref flags, ref type, ref id, ref locId, serial, desc, ref dummyHandle);
-                    string sn = System.Text.Encoding.ASCII.GetString(serial).TrimEnd('\0');
-                    string description = System.Text.Encoding.ASCII.GetString(desc).TrimEnd('\0');
+                    
+                    int sLen = Array.IndexOf(serial, (byte)0);
+                    string sn = sLen >= 0 ? System.Text.Encoding.ASCII.GetString(serial, 0, sLen) : System.Text.Encoding.ASCII.GetString(serial);
+                    
+                    int dLen = Array.IndexOf(desc, (byte)0);
+                    string description = dLen >= 0 ? System.Text.Encoding.ASCII.GetString(desc, 0, dLen) : System.Text.Encoding.ASCII.GetString(desc);
+                    
                     Log($"  D2XX Device [{i}]: Serial='{sn}', Desc='{description}', ID=0x{id:X}, Status={detailStatus}");
+                    
+                    if (!string.IsNullOrEmpty(sn))
+                    {
+                        serials.Add(sn);
+                    }
                 }
             }
             catch (Exception ex)
             {
                 Log($"Error enumerating D2XX devices: {ex.Message}");
             }
+            return serials;
         }
 
         public static bool Start()
@@ -201,15 +222,34 @@ namespace dmxEasyDancing
             }
 
             // 2. Log FTDI D2XX Devices
-            EnumerateD2xxDevices();
+            var serials = EnumerateD2xxDevices();
 
             // 3. Open FTDI Device
             Log("Attempting to open FTDI device via D2XX FT_Open(0)...");
             FT_STATUS status = FT_Open(0, ref ftHandle);
+            
+            // Try by serial number if index 0 fails
+            if ((status != FT_STATUS.FT_OK || ftHandle == IntPtr.Zero) && serials.Count > 0)
+            {
+                foreach (var sn in serials)
+                {
+                    Log($"FT_Open(0) failed. Trying FT_OpenEx by Serial Number: {sn}...");
+                    status = FT_OpenEx(sn, 1 /* OPEN_BY_SERIAL_NUMBER */, ref ftHandle);
+                    if (status == FT_STATUS.FT_OK && ftHandle != IntPtr.Zero)
+                    {
+                        break;
+                    }
+                }
+            }
+            
             if (status != FT_STATUS.FT_OK || ftHandle == IntPtr.Zero)
             {
-                Log($"FT_Open(0) failed with status: {status}. Trying FT_OpenEx by description...");
-                status = FT_OpenEx("USB Serial Converter", 2 /* OPEN_BY_DESCRIPTION */, ref ftHandle);
+                Log($"Trying FT_OpenEx by common descriptions...");
+                status = FT_OpenEx("FT232R USB UART", 2 /* OPEN_BY_DESCRIPTION */, ref ftHandle);
+                if (status != FT_STATUS.FT_OK || ftHandle == IntPtr.Zero)
+                {
+                    status = FT_OpenEx("USB Serial Converter", 2 /* OPEN_BY_DESCRIPTION */, ref ftHandle);
+                }
             }
 
             if (status != FT_STATUS.FT_OK || ftHandle == IntPtr.Zero)
@@ -226,9 +266,8 @@ namespace dmxEasyDancing
             status = FT_ResetDevice(ftHandle);
             Log($"  FT_ResetDevice: {status}");
 
-            // Baud rate 250,000: FTDI divisor is 12 (3,000,000 / 250,000 = 12)
-            status = FT_SetDivisor(ftHandle, (char)12);
-            Log($"  FT_SetDivisor(12) [250 kBaud]: {status}");
+            status = FT_SetBaudRate(ftHandle, 250000);
+            Log($"  FT_SetBaudRate(250000): {status}");
 
             status = FT_SetDataCharacteristics(ftHandle, BITS_8, STOP_BITS_2, PARITY_NONE);
             Log($"  FT_SetDataCharacteristics(8, Stop2, ParityNone): {status}");
@@ -236,8 +275,11 @@ namespace dmxEasyDancing
             status = FT_SetFlowControl(ftHandle, (char)FLOW_NONE, 0, 0);
             Log($"  FT_SetFlowControl(FLOW_NONE): {status}");
 
-            status = FT_ClrRts(ftHandle);
-            Log($"  FT_ClrRts: {status}");
+            // Some generic RS485 adapters require RTS/DTR to be set to enable the TX driver.
+            status = FT_SetRts(ftHandle);
+            Log($"  FT_SetRts (TX Enable for some generic adapters): {status}");
+            status = FT_SetDtr(ftHandle);
+            Log($"  FT_SetDtr: {status}");
 
             status = FT_Purge(ftHandle, PURGE_TX);
             status = FT_Purge(ftHandle, PURGE_RX);
@@ -297,7 +339,14 @@ namespace dmxEasyDancing
                     {
                         // 1. Send DMX Break & MAB
                         FT_SetBreakOn(ftHandle);
+                        
+                        // DMX Break must be at least 88 microseconds.
+                        Thread.Sleep(1); // Usually ~1-15ms
+                        
                         FT_SetBreakOff(ftHandle);
+                        
+                        // Mark After Break (MAB) - at least 8 microseconds.
+                        Thread.SpinWait(1000);
 
                         // 2. Start Code = 0
                         dmxBuffer[0] = 0;
@@ -306,8 +355,18 @@ namespace dmxEasyDancing
                         Marshal.Copy(dmxBuffer, 0, unmanagedBuffer, DMX_BUFFER_SIZE);
                         uint bytesWritten = 0;
                         FT_Write(ftHandle, unmanagedBuffer, (uint)DMX_BUFFER_SIZE, ref bytesWritten);
+                        
+                        // 4. Wait for the FTDI TX queue to become empty so we don't truncate the packet with the next Break
+                        uint rxQueue = 0, txQueue = 1, eventStatus = 0;
+                        int waitTimeout = 0;
+                        while (txQueue > 0 && waitTimeout < 50)
+                        {
+                            if (FT_GetStatus(ftHandle, ref rxQueue, ref txQueue, ref eventStatus) != FT_STATUS.FT_OK) break;
+                            if (txQueue > 0) Thread.Sleep(1);
+                            waitTimeout++;
+                        }
                     }
-                    Thread.Sleep(25); // ~40Hz refresh rate
+                    Thread.Sleep(20); // Maintain a stable refresh rate (total loop time ~ 25-45ms -> ~20-40 Hz)
                 }
             }
             finally
