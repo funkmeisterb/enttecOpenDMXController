@@ -71,8 +71,8 @@ namespace dmxEasyDancing
             ref uint type,
             ref uint id,
             ref uint locId,
-            byte[] serialNumber,
-            byte[] description,
+            [Out] byte[] serialNumber,
+            [Out] byte[] description,
             ref IntPtr handle);
 
         [DllImport("FTD2XX.dll")]
@@ -162,8 +162,9 @@ namespace dmxEasyDancing
             return devices;
         }
 
-        private static void EnumerateD2xxDevices()
+        private static List<string> EnumerateD2xxDevices()
         {
+            var serials = new List<string>();
             try
             {
                 uint numDevs = 0;
@@ -176,15 +177,26 @@ namespace dmxEasyDancing
                     byte[] desc = new byte[64];
                     IntPtr dummyHandle = IntPtr.Zero;
                     FT_STATUS detailStatus = FT_GetDeviceInfoDetail(i, ref flags, ref type, ref id, ref locId, serial, desc, ref dummyHandle);
-                    string sn = System.Text.Encoding.ASCII.GetString(serial).TrimEnd('\0');
-                    string description = System.Text.Encoding.ASCII.GetString(desc).TrimEnd('\0');
+                    
+                    int sLen = Array.IndexOf(serial, (byte)0);
+                    string sn = sLen >= 0 ? System.Text.Encoding.ASCII.GetString(serial, 0, sLen) : System.Text.Encoding.ASCII.GetString(serial);
+                    
+                    int dLen = Array.IndexOf(desc, (byte)0);
+                    string description = dLen >= 0 ? System.Text.Encoding.ASCII.GetString(desc, 0, dLen) : System.Text.Encoding.ASCII.GetString(desc);
+                    
                     Log($"  D2XX Device [{i}]: Serial='{sn}', Desc='{description}', ID=0x{id:X}, Status={detailStatus}");
+                    
+                    if (!string.IsNullOrEmpty(sn))
+                    {
+                        serials.Add(sn);
+                    }
                 }
             }
             catch (Exception ex)
             {
                 Log($"Error enumerating D2XX devices: {ex.Message}");
             }
+            return serials;
         }
 
         public static bool Start()
@@ -201,15 +213,30 @@ namespace dmxEasyDancing
             }
 
             // 2. Log FTDI D2XX Devices
-            EnumerateD2xxDevices();
+            var serials = EnumerateD2xxDevices();
 
             // 3. Open FTDI Device
             Log("Attempting to open FTDI device via D2XX FT_Open(0)...");
             FT_STATUS status = FT_Open(0, ref ftHandle);
+            
+            if ((status != FT_STATUS.FT_OK || ftHandle == IntPtr.Zero) && serials.Count > 0)
+            {
+                foreach (var sn in serials)
+                {
+                    Log($"FT_Open(0) failed. Trying FT_OpenEx by Serial Number: {sn}...");
+                    status = FT_OpenEx(sn, 1 /* OPEN_BY_SERIAL_NUMBER */, ref ftHandle);
+                    if (status == FT_STATUS.FT_OK && ftHandle != IntPtr.Zero) break;
+                }
+            }
+            
             if (status != FT_STATUS.FT_OK || ftHandle == IntPtr.Zero)
             {
-                Log($"FT_Open(0) failed with status: {status}. Trying FT_OpenEx by description...");
-                status = FT_OpenEx("USB Serial Converter", 2 /* OPEN_BY_DESCRIPTION */, ref ftHandle);
+                Log($"Trying FT_OpenEx by common descriptions...");
+                status = FT_OpenEx("FT232R USB UART", 2 /* OPEN_BY_DESCRIPTION */, ref ftHandle);
+                if (status != FT_STATUS.FT_OK || ftHandle == IntPtr.Zero)
+                {
+                    status = FT_OpenEx("USB Serial Converter", 2 /* OPEN_BY_DESCRIPTION */, ref ftHandle);
+                }
             }
 
             if (status != FT_STATUS.FT_OK || ftHandle == IntPtr.Zero)
@@ -286,6 +313,16 @@ namespace dmxEasyDancing
             }
         }
 
+        private static void DelayMicroseconds(double microseconds)
+        {
+            long start = System.Diagnostics.Stopwatch.GetTimestamp();
+            long ticks = (long)(microseconds * System.Diagnostics.Stopwatch.Frequency / 1_000_000.0);
+            while (System.Diagnostics.Stopwatch.GetTimestamp() - start < ticks)
+            {
+                Thread.SpinWait(10);
+            }
+        }
+
         private static void DmxThread()
         {
             IntPtr unmanagedBuffer = Marshal.AllocHGlobal(DMX_BUFFER_SIZE);
@@ -297,7 +334,9 @@ namespace dmxEasyDancing
                     {
                         // 1. Send DMX Break & MAB
                         FT_SetBreakOn(ftHandle);
+                        DelayMicroseconds(120); // DMX Break: 88-176us minimum
                         FT_SetBreakOff(ftHandle);
+                        DelayMicroseconds(20);  // MAB: 8us minimum
 
                         // 2. Start Code = 0
                         dmxBuffer[0] = 0;
