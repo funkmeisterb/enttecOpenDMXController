@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Management;
+using System.IO.Ports;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Threading;
@@ -17,6 +18,9 @@ namespace dmxEasyDancing
         private static IntPtr ftHandle = IntPtr.Zero;
         private static bool dmxThreadRunning = false;
         private static Thread? dmxThread;
+        
+        private static SerialPort? serialPort;
+        private static bool useSerialFallback = false;
 
         public static bool EnableDebugLogging { get; set; } = true;
         public static Action<string> Logger { get; set; } = Console.WriteLine;
@@ -271,33 +275,70 @@ namespace dmxEasyDancing
             if (status != FT_STATUS.FT_OK || ftHandle == IntPtr.Zero)
             {
                 Log($"Failed to open FTDI D2XX device. Final status: {status}");
-                Log("==================================================");
-                return false;
+                
+                // Fallback to System.IO.Ports if we found a COM port in WMI
+                Log("Attempting standard System.IO.Ports.SerialPort fallback...");
+                foreach (var d in devices)
+                {
+                    if (d.Name.Contains("(COM"))
+                    {
+                        int start = d.Name.IndexOf("(COM") + 1;
+                        int end = d.Name.IndexOf(")", start);
+                        if (start > 0 && end > start)
+                        {
+                            string comPort = d.Name.Substring(start, end - start);
+                            Log($"Trying SerialPort fallback on {comPort}...");
+                            try
+                            {
+                                serialPort = new SerialPort(comPort, 250000, Parity.None, 8, StopBits.Two);
+                                serialPort.Handshake = Handshake.None;
+                                serialPort.Open();
+                                useSerialFallback = true;
+                                Log($"Successfully opened {comPort} via standard SerialPort!");
+                                break;
+                            }
+                            catch (Exception ex)
+                            {
+                                Log($"SerialPort {comPort} failed: {ex.Message}");
+                                serialPort?.Dispose();
+                                serialPort = null;
+                            }
+                        }
+                    }
+                }
+                
+                if (!useSerialFallback)
+                {
+                    Log("==================================================");
+                    return false;
+                }
             }
+            else
+            {
+                Log($"Successfully opened FTDI D2XX device! Handle: 0x{ftHandle.ToInt64():X}");
 
-            Log($"Successfully opened FTDI D2XX device! Handle: 0x{ftHandle.ToInt64():X}");
+                Log("Configuring FTDI chip for DMX512 (250,000 baud, 8N2, RTS cleared, no flow control)...");
+                status = FT_ResetDevice(ftHandle);
+                Log($"  FT_ResetDevice: {status}");
 
-            Log("Configuring FTDI chip for DMX512 (250,000 baud, 8N2, RTS cleared, no flow control)...");
-            status = FT_ResetDevice(ftHandle);
-            Log($"  FT_ResetDevice: {status}");
+                // Baud rate 250,000: FTDI divisor is 12 (3,000,000 / 250,000 = 12)
+                status = FT_SetDivisor(ftHandle, 12);
+                Log($"  FT_SetDivisor(12) [250 kBaud]: {status}");
 
-            // Baud rate 250,000: FTDI divisor is 12 (3,000,000 / 250,000 = 12)
-            status = FT_SetDivisor(ftHandle, 12);
-            Log($"  FT_SetDivisor(12) [250 kBaud]: {status}");
+                status = FT_SetDataCharacteristics(ftHandle, BITS_8, STOP_BITS_2, PARITY_NONE);
+                Log($"  FT_SetDataCharacteristics(8, Stop2, ParityNone): {status}");
 
-            status = FT_SetDataCharacteristics(ftHandle, BITS_8, STOP_BITS_2, PARITY_NONE);
-            Log($"  FT_SetDataCharacteristics(8, Stop2, ParityNone): {status}");
+                status = FT_SetFlowControl(ftHandle, FLOW_NONE, 0, 0);
+                Log($"  FT_SetFlowControl(FLOW_NONE): {status}");
 
-            status = FT_SetFlowControl(ftHandle, FLOW_NONE, 0, 0);
-            Log($"  FT_SetFlowControl(FLOW_NONE): {status}");
+                // Enttec Open DMX explicitly requires RTS to be cleared
+                status = FT_ClrRts(ftHandle);
+                Log($"  FT_ClrRts: {status}");
 
-            // Enttec Open DMX explicitly requires RTS to be cleared
-            status = FT_ClrRts(ftHandle);
-            Log($"  FT_ClrRts: {status}");
-
-            status = FT_Purge(ftHandle, PURGE_TX);
-            status = FT_Purge(ftHandle, PURGE_RX);
-            Log("  FT_Purge(TX/RX) complete.");
+                status = FT_Purge(ftHandle, PURGE_TX);
+                status = FT_Purge(ftHandle, PURGE_RX);
+                Log("  FT_Purge(TX/RX) complete.");
+            }
 
             Log("Starting continuous DMX output thread...");
             dmxThread = new Thread(DmxThread)
@@ -330,6 +371,13 @@ namespace dmxEasyDancing
                 ftHandle = IntPtr.Zero;
                 Log("FTDI D2XX device handle closed.");
             }
+            if (serialPort != null)
+            {
+                try { serialPort.Close(); } catch { }
+                try { serialPort.Dispose(); } catch { }
+                serialPort = null;
+                Log("SerialPort fallback device closed.");
+            }
             Log("EnttecOpenDmx stopped.");
         }
 
@@ -358,7 +406,25 @@ namespace dmxEasyDancing
             {
                 while (dmxThreadRunning)
                 {
-                    if (ftHandle != IntPtr.Zero)
+                    if (useSerialFallback && serialPort != null && serialPort.IsOpen)
+                    {
+                        try
+                        {
+                            // 1. Send DMX Break & MAB
+                            serialPort.BreakState = true;
+                            DelayMicroseconds(120);
+                            serialPort.BreakState = false;
+                            DelayMicroseconds(20);
+
+                            // 2. Start Code = 0
+                            dmxBuffer[0] = 0;
+                            
+                            // 3. Write DMX Packet
+                            serialPort.Write(dmxBuffer, 0, DMX_BUFFER_SIZE);
+                        }
+                        catch { }
+                    }
+                    else if (ftHandle != IntPtr.Zero)
                     {
                         // 1. Send DMX Break & MAB
                         FT_SetBreakOn(ftHandle);
