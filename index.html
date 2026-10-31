@@ -398,14 +398,6 @@
       font-weight: 500;
       padding: 7px 12px;
       cursor: pointer;
-    <div class="row">
-        <label for="random-vfx-toggle">Random VFX</label>
-        <label class="switch">
-            <input type="checkbox" id="random-vfx-toggle">
-            <span class="toggle-slider"></span>
-        </label>
-    </div>
-
     }
 
     .toggle-switch {
@@ -715,6 +707,13 @@
           <label id="vfxP2Label" style="font-size:0.85rem;">Radius / Decay</label>
           <input type="range" id="vfxP2" min="0" max="100" value="50">
           <span id="vfxP2Val" class="slider-val">0.45</span>
+        </div>
+        <div class="row">
+          <label for="random-vfx-toggle" style="font-size:0.85rem;">Random VFX</label>
+          <label class="switch">
+            <input type="checkbox" id="random-vfx-toggle">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
         <div id="vfxHint" class="vfx-hint">
           ✦ Drag on video to position center · <button id="vfxResetCenterBtn" type="button" class="btn-vfx" style="padding:2px 8px; font-size:0.75rem;">Reset Center</button> · Double-click for Fullscreen
@@ -1388,34 +1387,6 @@
       glCtx.attachShader(prog, vs);
       glCtx.attachShader(prog, fs);
       glCtx.linkProgram(prog);
-
-    const randomVFXToggle = document.getElementById('random-vfx-toggle');
-    let randomVFXInterval;
-
-    function changeVFX() {
-      const vfxKeys = Object.keys(VFX_CONFIGS);
-      const randomVFX = vfxKeys[Math.floor(Math.random() * vfxKeys.length)];
-      vfxSelect.value = randomVFX;
-      vfxSelect.dispatchEvent(new Event('change'));
-    }
-
-    randomVFXToggle.addEventListener('change', () => {
-      if (randomVFXToggle.checked) {
-        if (patternToggle.checked) {
-          patternToggle.checked = false;
-          patternToggle.dispatchEvent(new Event('change'));
-        }
-        if (!audioEl.paused) {
-          audioEl.pause();
-          playBtn.textContent = 'Play';
-          sendWhiteOnly(0);
-        }
-        changeVFX();
-        randomVFXInterval = setInterval(changeVFX, 60000);
-      } else {
-        clearInterval(randomVFXInterval);
-      }
-    });
 
       if (!glCtx.getProgramParameter(prog, glCtx.LINK_STATUS)) {
         console.error('[VFX Program Error]', glCtx.getProgramInfoLog(prog));
@@ -2144,6 +2115,36 @@
         startWebcam();
       }
     });
+
+    const randomVFXToggle = document.getElementById('random-vfx-toggle');
+    let randomVFXInterval;
+
+    function changeVFX() {
+      const vfxKeys = Object.keys(VFX_CONFIGS);
+      const randomVFX = vfxKeys[Math.floor(Math.random() * vfxKeys.length)];
+      vfxSelect.value = randomVFX;
+      vfxSelect.dispatchEvent(new Event('change'));
+    }
+
+    if (randomVFXToggle) {
+      randomVFXToggle.addEventListener('change', () => {
+        if (randomVFXToggle.checked) {
+          if (patternToggle.checked) {
+            patternToggle.checked = false;
+            patternToggle.dispatchEvent(new Event('change'));
+          }
+          if (!audioEl.paused) {
+            audioEl.pause();
+            playBtn.textContent = 'Play';
+            sendWhiteOnly(0);
+          }
+          changeVFX();
+          randomVFXInterval = setInterval(changeVFX, 60000);
+        } else {
+          clearInterval(randomVFXInterval);
+        }
+      });
+    }
 
     setVfxEffect('normal');
 
