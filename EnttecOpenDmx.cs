@@ -4,7 +4,6 @@ using System.ComponentModel;
 using System.Management;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace dmxEasyDancing
@@ -19,14 +18,7 @@ namespace dmxEasyDancing
         private static bool dmxThreadRunning = false;
         private static Thread? dmxThread;
 
-        /// <summary>
-        /// Controls whether debug information is printed during operations.
-        /// </summary>
         public static bool EnableDebugLogging { get; set; } = true;
-
-        /// <summary>
-        /// Custom logger action. Defaults to Console.WriteLine.
-        /// </summary>
         public static Action<string> Logger { get; set; } = Console.WriteLine;
 
         #region FTDI D2XX Driver Imports
@@ -71,8 +63,8 @@ namespace dmxEasyDancing
             ref uint type,
             ref uint id,
             ref uint locId,
-            [Out] byte[] serialNumber,
-            [Out] byte[] description,
+            byte[] serialNumber,
+            byte[] description,
             ref IntPtr handle);
 
         [DllImport("FTD2XX.dll")]
@@ -88,13 +80,13 @@ namespace dmxEasyDancing
         private static extern FT_STATUS FT_ResetDevice(IntPtr handle);
 
         [DllImport("FTD2XX.dll")]
-        private static extern FT_STATUS FT_SetBaudRate(IntPtr handle, uint dwBaudRate);
+        private static extern FT_STATUS FT_SetDivisor(IntPtr handle, ushort usDivisor);
 
         [DllImport("FTD2XX.dll")]
         private static extern FT_STATUS FT_SetDataCharacteristics(IntPtr handle, byte uWordLength, byte uStopBits, byte uParity);
 
         [DllImport("FTD2XX.dll")]
-        private static extern FT_STATUS FT_SetFlowControl(IntPtr handle, char usFlowControl, byte uXon, byte uXoff);
+        private static extern FT_STATUS FT_SetFlowControl(IntPtr handle, ushort usFlowControl, byte uXon, byte uXoff);
 
         [DllImport("FTD2XX.dll")]
         private static extern FT_STATUS FT_ClrRts(IntPtr handle);
@@ -113,12 +105,6 @@ namespace dmxEasyDancing
 
         [DllImport("FTD2XX.dll")]
         private static extern FT_STATUS FT_GetStatus(IntPtr handle, ref uint dwRxBytes, ref uint dwTxBytes, ref uint dwEventDWord);
-
-        [DllImport("FTD2XX.dll")]
-        private static extern FT_STATUS FT_SetDtr(IntPtr handle);
-
-        [DllImport("FTD2XX.dll")]
-        private static extern FT_STATUS FT_SetRts(IntPtr handle);
         #endregion
 
         private static void Log(string message)
@@ -213,7 +199,6 @@ namespace dmxEasyDancing
             Log("==================================================");
             Log("Starting EnttecOpenDmx initialization using native FTDI D2XX driver...");
 
-            // 1. Log WMI USB Devices
             var devices = ListUsbDevices();
             Log($"Found {devices.Count} USB/Serial device(s) in Windows PnP:");
             foreach (var d in devices)
@@ -221,24 +206,55 @@ namespace dmxEasyDancing
                 Log($"  [PnP] Name: \"{d.Name}\" | ID: {d.DeviceID}");
             }
 
-            // 2. Log FTDI D2XX Devices
             var serials = EnumerateD2xxDevices();
 
-            // 3. Open FTDI Device
+            // Fallback: extract serial from WMI PnP ID if D2XX enumeration missed it
+            foreach (var d in devices)
+            {
+                string pnp = string.IsNullOrEmpty(d.PNPDeviceID) ? d.DeviceID : d.PNPDeviceID;
+                if (pnp.Contains("VID_0403"))
+                {
+                    var parts = pnp.Split(new[] { '\\', '+', '&' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (pnp.StartsWith("USB\\") && parts.Length >= 3)
+                    {
+                        string s = parts[parts.Length - 1];
+                        if (!serials.Contains(s)) serials.Add(s);
+                    }
+                    else if (pnp.StartsWith("FTDIBUS\\") && parts.Length >= 4)
+                    {
+                        string s = parts[3];
+                        if (!serials.Contains(s)) serials.Add(s);
+                        if (s.EndsWith("A")) 
+                        {
+                            string s2 = s.Substring(0, s.Length - 1);
+                            if (!serials.Contains(s2)) serials.Add(s2);
+                        }
+                    }
+                }
+            }
+
             Log("Attempting to open FTDI device via D2XX FT_Open(0)...");
             FT_STATUS status = FT_Open(0, ref ftHandle);
             
-            // Try by serial number if index 0 fails
+            if (status != FT_STATUS.FT_OK || ftHandle == IntPtr.Zero)
+            {
+                Log("FT_Open(0) failed. Attempting to open by iterating all enumerated indices...");
+                uint numDevs = 0;
+                FT_CreateDeviceInfoList(ref numDevs);
+                for (uint i = 1; i < numDevs; i++)
+                {
+                    status = FT_Open(i, ref ftHandle);
+                    if (status == FT_STATUS.FT_OK && ftHandle != IntPtr.Zero) break;
+                }
+            }
+
             if ((status != FT_STATUS.FT_OK || ftHandle == IntPtr.Zero) && serials.Count > 0)
             {
                 foreach (var sn in serials)
                 {
-                    Log($"FT_Open(0) failed. Trying FT_OpenEx by Serial Number: {sn}...");
+                    Log($"Trying FT_OpenEx by Serial Number: {sn}...");
                     status = FT_OpenEx(sn, 1 /* OPEN_BY_SERIAL_NUMBER */, ref ftHandle);
-                    if (status == FT_STATUS.FT_OK && ftHandle != IntPtr.Zero)
-                    {
-                        break;
-                    }
+                    if (status == FT_STATUS.FT_OK && ftHandle != IntPtr.Zero) break;
                 }
             }
             
@@ -261,31 +277,28 @@ namespace dmxEasyDancing
 
             Log($"Successfully opened FTDI D2XX device! Handle: 0x{ftHandle.ToInt64():X}");
 
-            // 4. Initialise OpenDMX FTDI chip configuration
-            Log("Configuring FTDI chip for DMX512 (250,000 baud, 8N2, no flow control)...");
+            Log("Configuring FTDI chip for DMX512 (250,000 baud, 8N2, RTS cleared, no flow control)...");
             status = FT_ResetDevice(ftHandle);
             Log($"  FT_ResetDevice: {status}");
 
-            status = FT_SetBaudRate(ftHandle, 250000);
-            Log($"  FT_SetBaudRate(250000): {status}");
+            // Baud rate 250,000: FTDI divisor is 12 (3,000,000 / 250,000 = 12)
+            status = FT_SetDivisor(ftHandle, 12);
+            Log($"  FT_SetDivisor(12) [250 kBaud]: {status}");
 
             status = FT_SetDataCharacteristics(ftHandle, BITS_8, STOP_BITS_2, PARITY_NONE);
             Log($"  FT_SetDataCharacteristics(8, Stop2, ParityNone): {status}");
 
-            status = FT_SetFlowControl(ftHandle, (char)FLOW_NONE, 0, 0);
+            status = FT_SetFlowControl(ftHandle, FLOW_NONE, 0, 0);
             Log($"  FT_SetFlowControl(FLOW_NONE): {status}");
 
-            // Some generic RS485 adapters require RTS/DTR to be set to enable the TX driver.
-            status = FT_SetRts(ftHandle);
-            Log($"  FT_SetRts (TX Enable for some generic adapters): {status}");
-            status = FT_SetDtr(ftHandle);
-            Log($"  FT_SetDtr: {status}");
+            // Enttec Open DMX explicitly requires RTS to be cleared
+            status = FT_ClrRts(ftHandle);
+            Log($"  FT_ClrRts: {status}");
 
             status = FT_Purge(ftHandle, PURGE_TX);
             status = FT_Purge(ftHandle, PURGE_RX);
             Log("  FT_Purge(TX/RX) complete.");
 
-            // 5. Start continuous DMX transmission thread
             Log("Starting continuous DMX output thread...");
             dmxThread = new Thread(DmxThread)
             {
@@ -328,6 +341,16 @@ namespace dmxEasyDancing
             }
         }
 
+        private static void DelayMicroseconds(double microseconds)
+        {
+            long start = System.Diagnostics.Stopwatch.GetTimestamp();
+            long ticks = (long)(microseconds * System.Diagnostics.Stopwatch.Frequency / 1_000_000.0);
+            while (System.Diagnostics.Stopwatch.GetTimestamp() - start < ticks)
+            {
+                Thread.SpinWait(10);
+            }
+        }
+
         private static void DmxThread()
         {
             IntPtr unmanagedBuffer = Marshal.AllocHGlobal(DMX_BUFFER_SIZE);
@@ -340,13 +363,13 @@ namespace dmxEasyDancing
                         // 1. Send DMX Break & MAB
                         FT_SetBreakOn(ftHandle);
                         
-                        // DMX Break must be at least 88 microseconds.
-                        Thread.Sleep(1); // Usually ~1-15ms
+                        // DMX Break must be at least 88 microseconds (typically 120us is used)
+                        DelayMicroseconds(120);
                         
                         FT_SetBreakOff(ftHandle);
                         
-                        // Mark After Break (MAB) - at least 8 microseconds.
-                        Thread.SpinWait(1000);
+                        // Mark After Break (MAB) must be at least 8 microseconds (typically 20us is used)
+                        DelayMicroseconds(20);
 
                         // 2. Start Code = 0
                         dmxBuffer[0] = 0;
@@ -355,18 +378,8 @@ namespace dmxEasyDancing
                         Marshal.Copy(dmxBuffer, 0, unmanagedBuffer, DMX_BUFFER_SIZE);
                         uint bytesWritten = 0;
                         FT_Write(ftHandle, unmanagedBuffer, (uint)DMX_BUFFER_SIZE, ref bytesWritten);
-                        
-                        // 4. Wait for the FTDI TX queue to become empty so we don't truncate the packet with the next Break
-                        uint rxQueue = 0, txQueue = 1, eventStatus = 0;
-                        int waitTimeout = 0;
-                        while (txQueue > 0 && waitTimeout < 50)
-                        {
-                            if (FT_GetStatus(ftHandle, ref rxQueue, ref txQueue, ref eventStatus) != FT_STATUS.FT_OK) break;
-                            if (txQueue > 0) Thread.Sleep(1);
-                            waitTimeout++;
-                        }
                     }
-                    Thread.Sleep(20); // Maintain a stable refresh rate (total loop time ~ 25-45ms -> ~20-40 Hz)
+                    Thread.Sleep(25); // ~40Hz refresh rate
                 }
             }
             finally

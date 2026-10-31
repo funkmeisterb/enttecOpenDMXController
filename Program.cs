@@ -232,6 +232,7 @@ namespace dmxEasyDancing
                     while (!token.IsCancellationRequested)
                     {
                         var c = colors[index % colors.Length];
+                        Console.WriteLine($"[Test Pattern] Changing to {c.name} - Gain: 255, R: {c.r}, G: {c.g}, B: {c.b}, W: {c.w}");
                         SetPixelColor(0, gain: 255, c.r, c.g, c.b, c.w);
                         index++;
 
