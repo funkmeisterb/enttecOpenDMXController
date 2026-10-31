@@ -133,7 +133,7 @@
       height: 26px;
     }
     .switch input { opacity: 0; width: 0; height: 0; }
-    .slider-toggle {
+    .toggle-slider {
       position: absolute;
       cursor: pointer;
       top: 0; left: 0; right: 0; bottom: 0;
@@ -141,7 +141,7 @@
       transition: .3s;
       border-radius: 34px;
     }
-    .slider-toggle:before {
+    .toggle-slider:before {
       position: absolute;
       content: "";
       height: 18px;
@@ -152,8 +152,8 @@
       transition: .3s;
       border-radius: 50%;
     }
-    input:checked + .slider-toggle { background-color: var(--accent); }
-    input:checked + .slider-toggle:before { transform: translateX(22px); }
+    input:checked + .toggle-slider { background-color: var(--accent); }
+    input:checked + .toggle-slider:before { transform: translateX(22px); }
     .drop-zone {
       border: 2px dashed var(--border);
       border-radius: 10px;
@@ -341,7 +341,7 @@
     .vfx-canvas-wrap:fullscreen .vfx-fs-close-btn,
     .vfx-canvas-wrap:-webkit-full-screen .vfx-fs-close-btn,
     .vfx-canvas-wrap.is-fullscreen .vfx-fs-close-btn {
-      display: inline-flex;
+      
       align-items: center;
       gap: 6px;
     }
@@ -398,10 +398,54 @@
       font-weight: 500;
       padding: 7px 12px;
       cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      transition: background 0.15s, border-color 0.15s, transform 0.05s;
+    <div class="row">
+        <label for="random-vfx-toggle">Random VFX</label>
+        <label class="switch">
+            <input type="checkbox" id="random-vfx-toggle">
+            <span class="toggle-slider"></span>
+        </label>
+    </div>
+
+    }
+
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 40px;
+      height: 24px;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #4b5563;
+      transition: .4s;
+      border-radius: 34px;
+    }
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    input:checked + .toggle-slider {
+      background-color: var(--accent);
+    }
+    input:checked + .toggle-slider:before {
+      transform: translateX(16px);
     }
     .btn-vfx:hover {
       background: #475569;
@@ -505,7 +549,7 @@
         </div>
         <label class="switch">
           <input type="checkbox" id="patternToggle">
-          <span class="slider-toggle"></span>
+          <span class="toggle-slider"></span>
         </label>
       </div>
       <div class="switch-wrap">
@@ -515,7 +559,7 @@
         </div>
         <label class="switch">
           <input type="checkbox" id="randomEffectToggle">
-          <span class="slider-toggle"></span>
+          <span class="toggle-slider"></span>
         </label>
       </div>
     </div>
@@ -791,6 +835,10 @@
     }
 
     patternToggle.addEventListener('change', () => {
+      if (randomVFXToggle.checked) {
+        randomVFXToggle.checked = false;
+        randomVFXToggle.dispatchEvent(new Event('change'));
+      }
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
           type: 'pattern',
@@ -1113,6 +1161,10 @@
 
     playBtn.addEventListener('click', () => {
       initAudioContext();
+      if (randomVFXToggle.checked) {
+        randomVFXToggle.checked = false;
+        randomVFXToggle.dispatchEvent(new Event('change'));
+      }
       if (audioEl.paused) {
         audioEl.play();
         playBtn.textContent = 'Pause';
@@ -1302,7 +1354,7 @@
     const VFX_CONFIGS = {
       normal: { name: 'Normal', p1: { name: 'Gain', min: 0.2, max: 2, val: 1, step: 0.05, disabled: true }, p2: { name: 'N/A', min: 0, max: 1, val: 0.5, step: 0.05, disabled: true }, hasCenter: false },
       ghost: { name: 'Ghost', p1: { name: 'Aura Boost', min: 0.1, max: 2.5, val: 1.0, step: 0.05 }, p2: { name: 'Persistence', min: 0.5, max: 0.98, val: 0.88, step: 0.01 }, hasCenter: false },
-      color_ghost: { name: 'Color Ghost', p1: { name: 'RGB Spread', min: 0.1, max: 2.5, val: 1.0, step: 0.05 }, p2: { name: 'Persistence', min: 0.5, max: 0.98, val: 0.88, step: 0.01 }, hasCenter: false },
+      color_ghost: { name: 'Color Ghost', p1: { name: 'RGB Spread', min: 0.1, max: 2.5, val: 0.2, step: 0.05 }, p2: { name: 'Persistence', min: 0.5, max: 0.98, val: 0.69, step: 0.01 }, hasCenter: false },
       trail: { name: 'Trail', p1: { name: 'Intensity', min: 0.1, max: 2.0, val: 1.0, step: 0.05 }, p2: { name: 'Trail Length', min: 0.7, max: 0.99, val: 0.93, step: 0.01 }, hasCenter: false },
       shuffle: { name: 'Shuffle', p1: { name: 'Glitch Rate', min: 0.1, max: 2.0, val: 0.7, step: 0.05 }, p2: { name: 'Grid Size', min: 4, max: 32, val: 14, step: 1 }, hasCenter: false },
       twist: { name: 'Twist', p1: { name: 'Swirl Angle', min: -2.5, max: 2.5, val: 0.9, step: 0.05 }, p2: { name: 'Radius', min: 0.1, max: 0.9, val: 0.45, step: 0.02 }, hasCenter: true },
@@ -1310,7 +1362,7 @@
       pinch: { name: 'Pinch', p1: { name: 'Pinch Power', min: 0.1, max: 3.0, val: 1.2, step: 0.05 }, p2: { name: 'Radius', min: 0.1, max: 0.9, val: 0.45, step: 0.02 }, hasCenter: true },
       bulge: { name: 'Bulge', p1: { name: 'Magnification', min: 0.1, max: 2.5, val: 1.0, step: 0.05 }, p2: { name: 'Radius', min: 0.1, max: 0.9, val: 0.45, step: 0.02 }, hasCenter: true },
       wedge: { name: 'Wedge', p1: { name: 'Spin Speed', min: -2.0, max: 2.0, val: 0.5, step: 0.05 }, p2: { name: 'Sectors', min: 3, max: 24, val: 8, step: 1 }, hasCenter: true },
-      night_vision: { name: 'Night Vision', p1: { name: 'Luma Boost', min: 0.2, max: 2.5, val: 1.1, step: 0.05 }, p2: { name: 'Grain & Scan', min: 0.0, max: 2.0, val: 1.0, step: 0.05 }, hasCenter: false },
+      night_vision: { name: 'Night Vision', p1: { name: 'Luma Boost', min: 0.2, max: 2.5, val: 0.35, step: 0.05 }, p2: { name: 'Grain & Scan', min: 0.0, max: 2.0, val: 1.65, step: 0.05 }, hasCenter: false },
       thermal: { name: 'Thermal', p1: { name: 'Contrast', min: 0.2, max: 2.5, val: 1.0, step: 0.05 }, p2: { name: 'Heat Offset', min: 0.0, max: 1.0, val: 0.5, step: 0.02 }, hasCenter: false }
     };
 
@@ -1336,6 +1388,35 @@
       glCtx.attachShader(prog, vs);
       glCtx.attachShader(prog, fs);
       glCtx.linkProgram(prog);
+
+    const randomVFXToggle = document.getElementById('random-vfx-toggle');
+    let randomVFXInterval;
+
+    function changeVFX() {
+      const vfxKeys = Object.keys(VFX_CONFIGS);
+      const randomVFX = vfxKeys[Math.floor(Math.random() * vfxKeys.length)];
+      vfxSelect.value = randomVFX;
+      vfxSelect.dispatchEvent(new Event('change'));
+    }
+
+    randomVFXToggle.addEventListener('change', () => {
+      if (randomVFXToggle.checked) {
+        if (patternToggle.checked) {
+          patternToggle.checked = false;
+          patternToggle.dispatchEvent(new Event('change'));
+        }
+        if (!audioEl.paused) {
+          audioEl.pause();
+          playBtn.textContent = 'Play';
+          sendWhiteOnly(0);
+        }
+        changeVFX();
+        randomVFXInterval = setInterval(changeVFX, 60000);
+      } else {
+        clearInterval(randomVFXInterval);
+      }
+    });
+
       if (!glCtx.getProgramParameter(prog, glCtx.LINK_STATUS)) {
         console.error('[VFX Program Error]', glCtx.getProgramInfoLog(prog));
         return null;
@@ -2071,3 +2152,4 @@
   </script>
 </body>
 </html>
+
